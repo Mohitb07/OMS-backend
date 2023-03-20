@@ -12,7 +12,7 @@ module.exports = (req, res, next) => {
   }
 
   // Verify the access token
-  jwt.verify(accessToken, 'my_secret', async (err, payload) => {
+  jwt.verify(accessToken, process.env.JWT_SECRET, async (err, payload) => {
     if (err) {
       return res
         .status(401)

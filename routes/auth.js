@@ -22,7 +22,7 @@ router.post("/login", async (req, res) => {
     if (!match) {
       return res.status(401).json({ message: "Invalid username or password" });
     }
-    const accessToken = jwt.sign({ userId: user.id }, "my_secret", {
+    const accessToken = jwt.sign({ userId: user.id }, process.env.JWT_SECRET, {
       expiresIn: "1h",
     });
     return res.json({ user, accessToken });
@@ -39,7 +39,7 @@ router.post(
     body("email").isEmail().withMessage("Invalid email address"),
     body("username").notEmpty().withMessage("username is required"),
     body("password")
-      .isLength({ min: 8, max: 20 })
+      .isLength({ min: 8, max: Infinity })
       .withMessage("Password must be between 8 and 20 characters"),
   ],
   async (req, res) => {
@@ -57,7 +57,7 @@ router.post(
         phone: req.body.phone,
         address: req.body.address,
       });
-      const accessToken = jwt.sign({ userId: user.id }, "my_secret", {
+      const accessToken = jwt.sign({ userId: user.id }, process.env.JWT_SECRET, {
         expiresIn: "1h",
       });
       return res.status(201).json({ user, accessToken });
