@@ -11,10 +11,10 @@ const sequelize = new Sequelize(
   }
 );
 
-const Customer = sequelize.define(
-  "customer",
+const Customers = sequelize.define(
+  "customers",
   {
-    id: {
+    customer_id: {
       type: Sequelize.STRING,
       primaryKey: true,
       defaultValue: uuid.v4,
@@ -85,9 +85,11 @@ const Customer = sequelize.define(
   }
 );
 
+// Customers.hasMany(Orders, { as: 'orders' });
+
 sequelize
   .sync()
   .then(() => console.log("customer table created"))
   .catch((err) => console.log("error creating table", err));
 
-module.exports = Customer;
+module.exports = Customers;

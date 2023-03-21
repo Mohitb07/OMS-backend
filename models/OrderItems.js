@@ -1,8 +1,5 @@
 const Sequelize = require("sequelize");
 const uuid = require("uuid");
-const Customer = require("./Customer");
-const Orders = require("./Orders");
-const Product = require("./Product");
 
 const sequelize = new Sequelize(
   process.env.MYSQL_DATABASE,
@@ -14,33 +11,57 @@ const sequelize = new Sequelize(
   }
 );
 
-const OrderItem = sequelize.define(
-  "orderItem",
+const OrderItems = sequelize.define(
+  "order_items",
   {
-    id: {
+    order_item_id: {
       type: Sequelize.STRING,
       primaryKey: true,
       defaultValue: uuid.v4,
     },
-    unitAmount: {
-        type: Sequelize.INTEGER,
-        allowNull: false,
+    unit_amount: {
+      type: Sequelize.DECIMAL(10, 2),
+      allowNull: false,
     },
     quantity: {
-        type: Sequelize.INTEGER,
-        allowNull: false
-    }
+      type: Sequelize.INTEGER,
+      allowNull: false,
+    },
+    // order_id: {
+    //   type: Sequelize.STRING,
+    //   allowNull: false,
+    //   references: {
+    //     model: Orders,
+    //     key: "order_id",
+    //   },
+    // },
+    // product_id: {
+    //   type: Sequelize.STRING,
+    //   allowNull: false,
+    //   references: {
+    //     model: Products,
+    //     key: "product_id",
+    //   },
+    // },
   },
   {
     timestamps: true,
   }
 );
-Orders.hasMany(OrderItem)
-OrderItem.belongsTo(Orders)
-OrderItem.belongsTo(Product)
+
+
+// OrderItems.associate = (models) => {
+//   OrderItems.belongsTo(Orders)
+//   OrderItems.belongsTo(Products)
+// };
+// OrderItems.associate = (models) => {
+//   OrderItems.belongsTo(models.orders, {as: 'Orders', foreignKey: 'order_id'});
+//   OrderItems.belongsTo(models.products, {as: 'Products', foreignKey: 'product_id'});
+// };
+
 sequelize
   .sync()
   .then(() => console.log("Order item table created"))
   .catch((err) => console.log("error creating table", err));
 
-module.exports = OrderItem;
+module.exports = OrderItems;

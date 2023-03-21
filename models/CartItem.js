@@ -1,51 +1,63 @@
-const { Model, DataTypes, Sequelize } = require("sequelize");
+// const { Model, DataTypes, Sequelize } = require("sequelize");
 
-import Product from "./Product";
+// import Carts from "./Cart";
+// import Products from "./Product";
 
-const sequelize = new Sequelize(
-    process.env.MYSQL_DATABASE,
-    process.env.MYSQL_USER,
-    process.env.MYSQL_PASSWORD,
-    {
-      host: process.env.MYSQL_HOST,
-      dialect: "mysql",
-    }
-  );
+// const sequelize = new Sequelize(
+//   process.env.MYSQL_DATABASE,
+//   process.env.MYSQL_USER,
+//   process.env.MYSQL_PASSWORD,
+//   {
+//     host: process.env.MYSQL_HOST,
+//     dialect: "mysql",
+//   }
+// );
 
-class CartItem extends Model {}
+// const CartItems = sequelize.define("cart_items", {
+//   cart_item_id: {
+//     type: Sequelize.INTEGER,
+//     primaryKey: true,
+//   },
+//   quantity: Sequelize.INTEGER,
+//   unit_amount: Sequelize.DECIMAL(10, 2),
+//   // cart_id: {
+//   //   type: Sequelize.STRING,
+//   //   allowNull: false,
+//   //   references: {
+//   //     model: Carts,
+//   //     key: "cart_id",
+//   //   },
+//   // },
+//   // product_id: {
+//   //   type: Sequelize.STRING,
+//   //   allowNull: false,
+//   //   references: {
+//   //     model: Products,
+//   //     key: "product_id",
+//   //   },
+//   // },
+// }, {
+//   timestamps: true
+// });
 
-CartItem.init(
-  {
-    id: {
-      type: DataTypes.INTEGER,
-      primaryKey: true,
-      autoIncrement: true,
-    },
-    quantity: {
-      type: DataTypes.INTEGER,
-      allowNull: false,
-      defaultValue: 1,
-    },
-    price: {
-      type: DataTypes.DECIMAL(10, 2),
-      allowNull: false,
-    },
-  },
-  {
-    sequelize,
-    modelName: "CartItem",
-  }
-);
+// CartItems.associate = (models) => {
+//   CartItems.belongsTo(Carts)
+//   CartItems.belongsTo(Products)
+// };
 
-CartItem.belongsTo(Cart);
-Cart.hasMany(CartItem);
+// // Carts.associate = (models) => {
+// //   Carts.belongsTo(models.cart, {
+// //     as: "Cart",
+// //     foreignKey: "cart_id",
+// //   });
+// //   Carts.belongsTo(models.products, {
+// //     as: "Products",
+// //     foreignKey: "product_id",
+// //   });
+// // };
+// sequelize
+//   .sync()
+//   .then(() => console.log("Cart Item table created"))
+//   .catch((err) => console.log("error creating table", err));
 
-CartItem.belongsTo(Product);
-Product.hasMany(CartItem);
-
-sequelize
-  .sync()
-  .then(() => console.log("Cart Item table created"))
-  .catch((err) => console.log("error creating table", err));
-
-module.exports = CartItem;
+// module.exports = CartItems;

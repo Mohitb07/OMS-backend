@@ -10,10 +10,10 @@ const sequelize = new Sequelize(
     dialect: "mysql",
   }
 );
-const Product = sequelize.define(
-  "product",
+const Products = sequelize.define(
+  "products",
   {
-    id: {
+    product_id: {
       type: Sequelize.STRING,
       primaryKey: true,
       defaultValue: uuid.v4,
@@ -30,15 +30,15 @@ const Product = sequelize.define(
         },
       },
     },
-    detail: {
+    description: {
       type: Sequelize.STRING,
       allowNull: false,
       validate: {
         notNull: {
-          msg: "Please provide product name",
+          msg: "Please provide product description",
         },
         notEmpty: {
-          msg: "Please provide product name",
+          msg: "Please provide product description",
         },
       },
     },
@@ -54,15 +54,15 @@ const Product = sequelize.define(
         },
       },
     },
-    imageURL: {
+    image_url: {
       type: Sequelize.STRING,
       allowNull: false,
       validate: {
         notNull: {
-          msg: "Please provide product price",
+          msg: "Please provide product image url",
         },
         notEmpty: {
-          msg: "Please provide product price",
+          msg: "Please provide product image url",
         },
       },
     },
@@ -77,4 +77,4 @@ sequelize
   .then(() => console.log("product table created"))
   .catch((err) => console.log("error creating table", err));
 
-module.exports = Product;
+module.exports = Products;

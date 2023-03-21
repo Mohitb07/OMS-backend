@@ -1,7 +1,7 @@
 const express = require("express");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
-const Customer = require("../models/Customer");
+const Customer = require('../models/index').Customers
 const router = new express.Router();
 const { body, validationResult } = require("express-validator");
 
@@ -22,7 +22,7 @@ router.post("/login", async (req, res) => {
     if (!match) {
       return res.status(401).json({ message: "Invalid username or password" });
     }
-    const accessToken = jwt.sign({ userId: user.id }, process.env.JWT_SECRET, {
+    const accessToken = jwt.sign({ userId: user.customer_id }, process.env.JWT_SECRET, {
       expiresIn: "1h",
     });
     return res.json({ user, accessToken });
@@ -57,7 +57,7 @@ router.post(
         phone: req.body.phone,
         address: req.body.address,
       });
-      const accessToken = jwt.sign({ userId: user.id }, process.env.JWT_SECRET, {
+      const accessToken = jwt.sign({ userId: user.customer_id }, process.env.JWT_SECRET, {
         expiresIn: "1h",
       });
       return res.status(201).json({ user, accessToken });

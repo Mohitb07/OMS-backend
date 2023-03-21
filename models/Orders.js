@@ -1,6 +1,5 @@
 const Sequelize = require("sequelize");
 const uuid = require("uuid");
-const Customer = require("./Customer");
 
 const sequelize = new Sequelize(
   process.env.MYSQL_DATABASE,
@@ -15,26 +14,30 @@ const sequelize = new Sequelize(
 const Orders = sequelize.define(
   "orders",
   {
-    id: {
+    order_id: {
       type: Sequelize.STRING,
       primaryKey: true,
       defaultValue: uuid.v4,
     },
-    totalAmount: {
-        type: Sequelize.INTEGER,
-        allowNull: false,
+    total_amount: {
+      type: Sequelize.INTEGER,
+      allowNull: false,
     },
+    status: Sequelize.ENUM("pending", "processing", "shipped", "delivered"),
   },
   {
     timestamps: true,
   }
 );
-Customer.hasMany(Orders, {foreignKey: 'user_id'})
-Orders.belongsTo(Customer, {foreignKey: 'user_id'})
+
+// Orders.hasMany(OrderItems, { as: 'orders_items' });
+// Orders.associate = (models) => {
+//   Orders.belongsTo(Customers);
+// };
 
 sequelize
   .sync()
-  .then(() => console.log("Order table created"))
+  .then(() => console.log("Orders table created"))
   .catch((err) => console.log("error creating table", err));
 
 module.exports = Orders;
