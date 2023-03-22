@@ -1,4 +1,4 @@
-const Customer = require("../models/Customer");
+const Customer = require("../models/index").Customers;
 const jwt = require('jsonwebtoken')
 
 module.exports = (req, res, next) => {
