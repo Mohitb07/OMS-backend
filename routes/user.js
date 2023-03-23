@@ -1,6 +1,6 @@
 const express = require("express");
 const auth = require("../middleware/auth");
-const Products= require("../models/index").Products;
+const Products = require("../models/index").Products;
 const Customers = require("../models/index").Customers;
 const Orders = require("../models/index").Orders;
 const OrderItems = require("../models/index").OrderItems;
@@ -59,6 +59,9 @@ router.get("/cart", auth, async (req, res) => {
       model: Carts,
       include: {
         model: CartItems,
+        include: {
+          model: Products,
+        },
       },
     },
   })
@@ -76,47 +79,22 @@ router.get("/cart", auth, async (req, res) => {
     });
 });
 
-router.post('/product', auth, async(req, res) => {
-  const {name, description, price, image_url, } = req.body;
+router.post("/product", auth, async (req, res) => {
+  const { name, description, price, image_url } = req.body;
   try {
     const product = await Products.create({
       name,
       description,
-      price, 
-      image_url
-    })
-    return res.status(201).send({message: 'Product created'})
+      price,
+      image_url,
+    });
+    return res.status(201).send({ message: "Product created" });
   } catch (error) {
-    return res.status(500).send({message: 'Internal server error try again'})    
+    return res.status(500).send({ message: "Internal server error try again" });
   }
-})
+});
 
-// router.post('/carts', async (req, res) => {
-//   try {
-//     const { productIds } = req.body;
-//     const { customer_id } = req.user;
-
-//     // Create a new cart record in the Cart table
-//     const cart = await Cart.create({ cart_id: customer_id });
-
-//     // Create cart item records in the CartItem table for each product
-//     for (const productId of productIds) {
-//       await CartItem.create({
-//         cart_id: cart.id,
-//         product_id: productId,
-//         quantity: 1, // Set the default quantity to 1, or any other value you prefer
-//       });
-//     }
-
-//     return res.json({ message: 'Cart created successfully!' });
-//   } catch (error) {
-//     console.error(error);
-//     return res.status(500).json({ error: 'An error occurred while processing your request' });
-//   }
-// });
-
-// POST /users/:userId/carts
-router.post('/carts', auth, async (req, res) => {
+router.post("/carts", auth, async (req, res) => {
   const { customer_id } = req.user;
   const { product_id, product_price } = req.body;
 
@@ -124,17 +102,17 @@ router.post('/carts', auth, async (req, res) => {
     // Find the user by ID
     const user = await Customers.findByPk(customer_id);
     if (!user) {
-      return res.status(404).send({ message: 'User not found' });
+      return res.status(404).send({ message: "User not found" });
     }
 
     // Find the user's active cart or create a new one
     let cart = await Carts.findOne({
-      where: { customer_id, status: 'active' },
+      where: { customer_id, status: "active" },
     });
     if (!cart) {
       cart = await Carts.create({
         customer_id,
-        status: 'active',
+        status: "active",
       });
     }
 
@@ -160,17 +138,16 @@ router.post('/carts', auth, async (req, res) => {
       unit_amount: product_price,
       cart_id: cart.cart_id,
       product_id,
-    })
-    
+    });
+
     return res.status(201).send({ cartItem });
   } catch (error) {
     console.error(error);
-    return res.status(500).send({ message: 'Internal server error' });
+    return res.status(500).send({ message: "Internal server error" });
   }
 });
 
-// POST /users/:userId/orders
-router.post('/orders', auth, async (req, res) => {
+router.post("/orders", auth, async (req, res) => {
   const { customer_id } = req.user;
   try {
     // Find the user by ID
@@ -180,18 +157,18 @@ router.post('/orders', auth, async (req, res) => {
         include: {
           model: CartItems,
         },
-        where: { status: 'active' },
+        where: { status: "active" },
       },
     });
     if (!user) {
-      return res.status(404).send({ message: 'User not found' });
+      return res.status(404).send({ message: "User not found" });
     }
 
     // Create the order
     const order = await Orders.create({
       customer_id,
       total_amount: 0,
-      status: 'pending',
+      status: "pending",
     });
 
     // Create the order items from the cart items
@@ -207,19 +184,73 @@ router.post('/orders', auth, async (req, res) => {
       // Remove the cart item
       await cartItem.destroy();
     }
-    const total_amount = cartItems.reduce((acc, curr) => acc + curr.quantity * curr.unit_amount, 0)
-    
+    const total_amount = cartItems.reduce(
+      (acc, curr) => acc + curr.quantity * curr.unit_amount,
+      0
+    );
+
     // Update the cart status to 'completed'
     const cart = user.cart;
-    cart.status = 'completed';
-    order.total_amount = total_amount
+    cart.status = "completed";
+    order.total_amount = total_amount;
     await cart.save();
-    await order.save()
+    await order.save();
 
     return res.status(201).send({ order });
   } catch (error) {
     console.error(error);
-    return res.status(500).send({ message: 'Internal server error' });
+    return res.status(500).send({ message: "Internal server error" });
+  }
+});
+
+router.patch("/carts", auth, async (req, res) => {
+  try {
+    const { quantity, product_id, cart_id, product_price } = req.body;
+
+    const cartItem = await CartItems.findOne({
+      where: {
+        cart_id,
+        product_id,
+      },
+    });
+
+    if (!cartItem) {
+      return res.status(404).json({ message: "Cart item not found" });
+    }
+    cartItem.quantity = quantity;
+    cartItem.unit_amount = product_price * quantity;
+    await cartItem.save();
+    return res.status(201).json(cartItem);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).send({ message: "Internal server error" });
+  }
+});
+
+router.delete("/carts", auth, async (req, res) => {
+  try {
+    const { cart_item_id, cart_id } = req.body;
+    const cartItem = await CartItems.findByPk(cart_item_id);
+    if (!cartItem) {
+      return res.status(404).json({ message: "Cart item not found" });
+    }
+    await cartItem.destroy();
+    const remainingItems = await CartItems.count({
+      where: {
+        cart_id,
+      },
+    });
+    if (remainingItems === 0) {
+      await Carts.destroy({
+        where: {
+          cart_id,
+        },
+      });
+    }
+    return res.status(201).json({ message: "Cart item removed" });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).send({ message: "Internal server error" });
   }
 });
 
