@@ -63,7 +63,10 @@ router.post(
       return res.status(201).json({ user, accessToken });
     } catch (error) {
       console.log(error);
-      return res.status(500).json({ error: "Something went wrong" });
+      if(error.name === "SequelizeUniqueConstraintError"){
+        return res.status(400).json({ message: "Email address already in use." });
+      }
+      return res.status(500).json({ message: "Something went wrong" });
     }
   }
 );
