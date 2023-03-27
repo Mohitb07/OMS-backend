@@ -1,5 +1,5 @@
 const Customer = require("../models/index").Customers;
-const jwt = require('jsonwebtoken')
+const jwt = require("jsonwebtoken");
 
 module.exports = (req, res, next) => {
   // Extract the access token from the Authorization header
@@ -16,7 +16,7 @@ module.exports = (req, res, next) => {
     if (err) {
       return res
         .status(401)
-        .json({ message: "Access token is invalid or expired" });
+        .json({ message: "Unauthorised please login to view the content" });
     }
 
     // Check if the user still exists in the database
@@ -24,7 +24,7 @@ module.exports = (req, res, next) => {
     if (!user) {
       return res
         .status(401)
-        .json({ message: "Access token is invalid or expired" });
+        .json({ message: "Unauthorised please login to view the content" });
     }
 
     // Store the user object in the request object for future use
