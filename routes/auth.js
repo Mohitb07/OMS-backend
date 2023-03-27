@@ -1,36 +1,17 @@
 const express = require("express");
-const bcrypt = require("bcrypt");
-const jwt = require("jsonwebtoken");
-const Customer = require('../models/index').Customers
 const router = new express.Router();
-const { body, validationResult } = require("express-validator");
+const { body } = require("express-validator");
+const authController = require("../controllers/authController");
 
 // login user
-router.post("/login", async (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password) {
-    return res
-      .status(400)
-      .json({ message: "Please provide valid username or password" });
-  }
-  try {
-    const user = await Customer.findOne({ where: { email } });
-    if (!user) {
-      return res.status(401).json({ message: "Invalid username or password" });
-    }
-    const match = await bcrypt.compare(password, user.password);
-    if (!match) {
-      return res.status(401).json({ message: "Invalid username or password" });
-    }
-    const accessToken = jwt.sign({ userId: user.customer_id }, process.env.JWT_SECRET, {
-      expiresIn: "1h",
-    });
-    return res.json({ user, accessToken });
-  } catch (error) {
-    console.log(error);
-    return res.status(500).json({ error: "Something went wrong" });
-  }
-});
+router.post(
+  "/login",
+  [
+    body("email").isEmail().withMessage("Invalid email address"),
+    body("password").notEmpty().withMessage("password is required"),
+  ],
+  authController.login
+);
 
 // register user
 router.post(
@@ -42,33 +23,7 @@ router.post(
       .isLength({ min: 8, max: Infinity })
       .withMessage("Password must be between 8 and 20 characters"),
   ],
-  async (req, res) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
-    }
-    const salt = bcrypt.genSaltSync(10);
-    const hashedPassword = bcrypt.hashSync(req.body.password, salt);
-    try {
-      const user = await Customer.create({
-        email: req.body.email,
-        username: req.body.username,
-        password: hashedPassword,
-        phone: req.body.phone,
-        address: req.body.address,
-      });
-      const accessToken = jwt.sign({ userId: user.customer_id }, process.env.JWT_SECRET, {
-        expiresIn: "1h",
-      });
-      return res.status(201).json({ user, accessToken });
-    } catch (error) {
-      console.log(error);
-      if(error.name === "SequelizeUniqueConstraintError"){
-        return res.status(400).json({ message: "Email address already in use." });
-      }
-      return res.status(500).json({ message: "Something went wrong" });
-    }
-  }
+  authController.register
 );
 
 module.exports = router;
