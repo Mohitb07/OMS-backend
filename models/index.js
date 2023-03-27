@@ -155,8 +155,11 @@ const Orders = sequelize.define(
       primaryKey: true,
       defaultValue: uuid.v4,
     },
+    address: {
+      type: Sequelize.STRING,
+    },
     total_amount: {
-      type: Sequelize.INTEGER,
+      type: Sequelize.DECIMAL(10, 2),
       allowNull: false,
     },
     status: Sequelize.ENUM("pending", "processing", "shipped", "delivered"),
@@ -182,7 +185,7 @@ const OrderItems = sequelize.define(
       primaryKey: true,
       defaultValue: uuid.v4,
     },
-    unit_amount: {
+    total_amount: {
       type: Sequelize.DECIMAL(10, 2),
       allowNull: false,
     },
@@ -244,12 +247,12 @@ const CartItems = sequelize.define(
       defaultValue: uuid.v4,
     },
     quantity: Sequelize.INTEGER,
-    unit_amount: Sequelize.DECIMAL(10, 2),
+    total_amount: Sequelize.DECIMAL(10, 2),
     cart_id: {
       type: Sequelize.STRING,
       allowNull: false,
       references: {
-        model: 'carts',
+        model: "carts",
         key: "cart_id",
       },
     },
@@ -257,7 +260,7 @@ const CartItems = sequelize.define(
       type: Sequelize.STRING,
       allowNull: false,
       references: {
-        model: 'products',
+        model: "products",
         key: "product_id",
       },
     },
