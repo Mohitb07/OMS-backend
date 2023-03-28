@@ -1,4 +1,4 @@
-const Customer = require("../models/index").Customers;
+const Customers = require("../models/index").Customers;
 const jwt = require("jsonwebtoken");
 
 module.exports = (req, res, next) => {
@@ -20,7 +20,15 @@ module.exports = (req, res, next) => {
     }
 
     // Check if the user still exists in the database
-    const user = await Customer.findByPk(payload.userId);
+    const user = await Customers.findOne({
+      where: {
+        customer_id: payload.userId,
+      },
+      attributes: {
+        exclude: ["password"],
+      },
+    });
+    // const user = await Customer.findByPk(payload.userId);
     if (!user) {
       return res
         .status(401)
