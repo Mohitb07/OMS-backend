@@ -1,0 +1,101 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model CartItems {
+  cart_item_id String   @id @db.VarChar(255)
+  quantity     Int?
+  total_amount Decimal? @db.Decimal(10, 2)
+  cart_id      String   @db.VarChar(255)
+  product_id   String   @db.VarChar(255)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  carts        Cart     @relation(fields: [cart_id], references: [cart_id], onDelete: NoAction, onUpdate: NoAction, map: "CartItems_ibfk_1")
+  products     Products @relation(fields: [product_id], references: [product_id], onDelete: NoAction, onUpdate: NoAction, map: "CartItems_ibfk_2")
+
+  @@index([cart_id], map: "cart_id")
+  @@index([product_id], map: "product_id")
+}
+
+model Cart {
+  cart_id     String        @id @db.VarChar(255)
+  status      carts_status?
+  customer_id String        @db.VarChar(255)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  cart_items  CartItems[]
+  customers   Customers     @relation(fields: [customer_id], references: [customer_id], onDelete: NoAction, onUpdate: NoAction, map: "Cart_ibfk_1")
+
+  @@index([customer_id], map: "customer_id")
+}
+
+model Customers {
+  customer_id String   @id @db.VarChar(255)
+  username    String   @db.VarChar(255)
+  phone       String?  @db.VarChar(255)
+  address     String   @db.VarChar(255)
+  email       String   @unique(map: "email") @db.VarChar(255)
+  password    String   @db.VarChar(255)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  carts       Cart[]
+  orders      Orders[]
+}
+
+model OrderItems {
+  order_item_id String   @id @db.VarChar(255)
+  total_amount  Decimal  @db.Decimal(10, 2)
+  quantity      Int
+  order_id      String   @db.VarChar(255)
+  product_id    String   @db.VarChar(255)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  orders        Orders   @relation(fields: [order_id], references: [order_id], onDelete: NoAction, onUpdate: NoAction, map: "OrderItems_ibfk_1")
+  products      Products @relation(fields: [product_id], references: [product_id], onDelete: NoAction, onUpdate: NoAction, map: "OrderItems_ibfk_2")
+
+  @@index([order_id], map: "order_id")
+  @@index([product_id], map: "product_id")
+}
+
+model Orders {
+  order_id     String         @id @db.VarChar(255)
+  address      String?        @db.VarChar(255)
+  total_amount Decimal        @db.Decimal(10, 2)
+  status       orders_status?
+  customer_id  String         @db.VarChar(255)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  order_items  OrderItems[]
+  customers    Customers      @relation(fields: [customer_id], references: [customer_id], onDelete: NoAction, onUpdate: NoAction, map: "Orders_ibfk_1")
+
+  @@index([customer_id], map: "customer_id")
+}
+
+model Products {
+  product_id  String       @id @db.VarChar(255)
+  name        String       @db.VarChar(255)
+  description String       @db.VarChar(255)
+  price       Decimal      @db.Decimal(10, 2)
+  image_url   String       @db.VarChar(255)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  cart_items  CartItems[]
+  order_items OrderItems[]
+}
+
+enum carts_status {
+  active
+  completed
+}
+
+enum orders_status {
+  pending
+  processing
+  shipped
+  delivered
+}
