@@ -1,6 +1,6 @@
 # OMS Back-End 🧋
 
-It's an Ecommerce platform server.
+It's an Ecommerce platform apis server built with Node JS.
 
 ## Run Locally
 
@@ -30,7 +30,7 @@ Start the server
 
 ## Tech Stack
 
-**Client:** JavaScript, MySql, Express JS, Sequelize, JWT
+**Client:** JavaScript, MySql, Express JS, Sequelize, JWT, Prisma
 
 ## Contributing
 
