@@ -1,8 +1,9 @@
-const { Products } = require("../models");
+// const { Products } = require("../models");
+const prisma = require("../prisma");
 
 const getAllProducts = async (req, res) => {
   try {
-    const products = await Products.findAll({});
+    const products = await prisma.products.findMany();
     if (products.length === 0) {
       return res.status(200).json([]);
     }
@@ -16,7 +17,11 @@ const getAllProducts = async (req, res) => {
 const getProduct = async (req, res) => {
   try {
     const { productId } = req.params;
-    const product = await Products.findByPk(productId);
+    const product = await prisma.products.findUnique({
+      where: {
+        product_id: productId,
+      },
+    });
     if (!product) {
       return res.status(404).send({ message: "Product not found" });
     }
@@ -30,11 +35,13 @@ const getProduct = async (req, res) => {
 const createProduct = async (req, res) => {
   const { name, description, price, image_url } = req.body;
   try {
-    await Products.create({
-      name,
-      description,
-      price,
-      image_url,
+    await prisma.products.create({
+      data: {
+        name,
+        description,
+        price,
+        image_url,
+      },
     });
     return res.status(201).send({ message: "Product created" });
   } catch (error) {
@@ -45,5 +52,5 @@ const createProduct = async (req, res) => {
 module.exports = {
   getAllProducts,
   getProduct,
-  createProduct
+  createProduct,
 };

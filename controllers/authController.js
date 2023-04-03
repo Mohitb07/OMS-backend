@@ -1,5 +1,9 @@
+const {
+  Prisma: { PrismaClientValidationError },
+} = require("@prisma/client");
 const bcrypt = require("bcrypt");
-const { Customers } = require("../models");
+// const { Customers } = require("../models");
+const prisma = require("../prisma");
 const jwt = require("jsonwebtoken");
 const { validationResult } = require("express-validator");
 
@@ -11,7 +15,11 @@ const login = async (req, res) => {
       .json({ message: "Please provide valid username or password" });
   }
   try {
-    const user = await Customers.findOne({ where: { email } });
+    const user = await prisma.customers.findUnique({
+      where: {
+        email: email,
+      },
+    });
     if (!user) {
       return res.status(401).json({ message: "Invalid username or password" });
     }
@@ -41,12 +49,14 @@ const register = async (req, res) => {
   const salt = bcrypt.genSaltSync(10);
   const hashedPassword = bcrypt.hashSync(req.body.password, salt);
   try {
-    const user = await Customers.create({
-      email: req.body.email,
-      username: req.body.username,
-      password: hashedPassword,
-      phone: req.body.phone,
-      address: req.body.address,
+    const user = await prisma.customers.create({
+      data: {
+        email: req.body.email,
+        username: req.body.username,
+        password: hashedPassword,
+        phone: req.body.phone,
+        address: req.body.address,
+      },
     });
     const accessToken = jwt.sign(
       { userId: user.customer_id },
@@ -58,8 +68,13 @@ const register = async (req, res) => {
     return res.status(201).json({ user, accessToken });
   } catch (error) {
     console.log(error);
-    if (error.name === "SequelizeUniqueConstraintError") {
-      return res.status(400).json({ message: "Email address already in use." });
+    if (error instanceof PrismaClientValidationError) {
+      const emailError = error.validationErrors.find(
+        (err) => err.path === "email"
+      );
+      if (emailError) {
+        console.error(`Email error: ${emailError.message}`);
+      }
     }
     return res.status(500).json({ message: "Something went wrong" });
   }

@@ -1,4 +1,11 @@
-const { Customers, Orders, OrderItems, Products, Carts, CartItems } = require("../models");
+const {
+  Customers,
+  Orders,
+  OrderItems,
+  Products,
+  Carts,
+  CartItems,
+} = require("../models");
 
 const getOrders = async (req, res) => {
   const { customer_id } = req.user;
