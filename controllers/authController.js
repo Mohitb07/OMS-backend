@@ -17,8 +17,11 @@ const login = async (req, res) => {
   try {
     const user = await prisma.customers.findUnique({
       where: {
-        email: email,
+        email,
       },
+      select: {
+        password: true
+      }
     });
     if (!user) {
       return res.status(401).json({ message: "Invalid username or password" });

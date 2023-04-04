@@ -1,4 +1,6 @@
-const Customers = require("../models/index").Customers;
+// const Customers = require("../models/index").Customers;
+const prisma = require('../prisma');
+
 const jwt = require("jsonwebtoken");
 
 module.exports = (req, res, next) => {
@@ -20,13 +22,13 @@ module.exports = (req, res, next) => {
     }
 
     // Check if the user still exists in the database
-    const user = await Customers.findOne({
+    const user = await prisma.customers.findUnique({
       where: {
         customer_id: payload.userId,
       },
-      attributes: {
-        exclude: ["password"],
-      },
+      select: {
+        password: false
+      }
     });
     // const user = await Customer.findByPk(payload.userId);
     if (!user) {
