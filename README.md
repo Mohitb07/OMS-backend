@@ -30,7 +30,7 @@ Start the server
 
 ## Tech Stack
 
-**Client:** JavaScript, MySql, Express JS, Sequelize, JWT, Prisma
+**Client:** JavaScript, MySql, Express JS, JWT, Prisma
 
 ## Contributing
 
