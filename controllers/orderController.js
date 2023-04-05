@@ -1,4 +1,4 @@
-const prisma = require("../prisma");
+const prisma = require("../prismaClient");
 
 const getOrders = async (req, res) => {
   const { customer_id } = req.user;
