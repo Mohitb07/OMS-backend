@@ -1,53 +1,54 @@
-const { Customers, CartItems, Carts, Products } = require("../models");
+const prisma = require("../prismaClient");
+const { products } = prisma
 
 const getCart = async (req, res) => {
   const { customer_id } = req.user;
-  Customers.findByPk(customer_id, {
-    include: {
-      model: Carts,
-      where: { status: "active" },
+  try {
+    const customer = await prisma.customers.findUnique({
+      where: {
+        customer_id,
+      },
       include: {
-        model: CartItems,
-        include: {
-          model: Products,
+        carts: {
+          where: {
+            status: "active",
+          },
+          include: {
+            cart_items: {
+              include: {
+                products: true,
+              },
+            },
+          },
         },
       },
-    },
-  })
-    .then((customer) => {
-      if (customer) {
-        const cart = customer.cart;
-        console.log("cart", cart);
-        return res.status(200).send({ cart });
-      }
-      return res.status(404).send({ message: "No active cart found" });
-    })
-    .catch((error) => {
-      console.error(error);
-      return res
-        .status(500)
-        .send({ message: "Internal server error try again" });
     });
+    if (customer.carts) {
+      const cart = customer.carts;
+      return res.status(200).send({ cart });
+    }
+    return res.status(404).send({ message: "No active cart found" });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).send({ message: "Internal server error try again" });
+  }
 };
 
 const getCartItemsCount = async (req, res) => {
   const { customer_id } = req.user;
-
-  CartItems.count({
-    include: {
-      model: Carts,
-      where: { customer_id },
-    },
-  })
-    .then((count) => {
-      return res.status(200).send(count.toString());
-    })
-    .catch((err) => {
-      console.log(err);
-      return res
-        .status(500)
-        .send({ message: "Internal server error try again" });
+  try {
+    const count = await prisma.cartItems.count({
+      where: {
+        carts: {
+          customer_id: customer_id,
+        },
+      },
     });
+    return res.status(200).send(count.toString());
+  } catch (error) {
+    console.log(error);
+    return res.status(500).send({ message: "Internal server error try again" });
+  }
 };
 
 const addToCart = async (req, res) => {
@@ -55,18 +56,29 @@ const addToCart = async (req, res) => {
   const { product_id, product_price } = req.body;
 
   try {
-    const user = await Customers.findByPk(customer_id);
+    const user = await prisma.customers.findUnique({
+      where: {
+        customer_id,
+      },
+    });
     if (!user) {
       return res.status(404).send({ message: "User not found" });
     }
 
-    let cart = await Carts.findOne({
-      where: { customer_id, status: "active" },
-    });
-    if (!cart) {
-      cart = await Carts.create({
+    let cart = await prisma.cart.findFirst({
+      where: {
         customer_id,
         status: "active",
+      },
+    });
+
+    if (!cart) {
+      cart = await prisma.cart.create({
+        data: {
+          customer_id,
+          status: "active",
+          cart_id: "randomIdCart4234",
+        },
       });
     }
 
@@ -87,11 +99,14 @@ const addToCart = async (req, res) => {
     //   });
     // }
 
-    const cartItem = await CartItems.create({
-      quantity: 1,
-      total_amount: product_price,
-      cart_id: cart.cart_id,
-      product_id,
+    const cartItem = await prisma.cartItems.create({
+      data: {
+        quantity: 1,
+        total_amount: product_price,
+        cart_id: cart.cart_id,
+        product_id,
+        cart_item_id: 'cartItemIdrandom244238409'
+      },
     });
 
     return res.status(201).send({ cartItem });
@@ -105,7 +120,7 @@ const updateCartQuantity = async (req, res) => {
   try {
     const { quantity, product_id, cart_id, product_price } = req.body;
 
-    const cartItem = await CartItems.findOne({
+    const cartItem = await prisma.cartItems.findFirst({
       where: {
         cart_id,
         product_id,
@@ -115,9 +130,15 @@ const updateCartQuantity = async (req, res) => {
     if (!cartItem) {
       return res.status(404).json({ message: "Cart item not found" });
     }
-    cartItem.quantity = quantity;
-    cartItem.total_amount = product_price * quantity;
-    await cartItem.save();
+    await prisma.cartItems.update({
+      where: {
+        cart_item_id: cartItem.cart_item_id,
+      },
+      data: {
+        quantity,
+        total_amount: product_price * quantity,
+      },
+    });
     return res.status(201).json(cartItem);
   } catch (error) {
     console.error(error);
@@ -128,18 +149,26 @@ const updateCartQuantity = async (req, res) => {
 const deleteCartItem = async (req, res) => {
   try {
     const { cart_item_id, cart_id } = req.body;
-    const cartItem = await CartItems.findByPk(cart_item_id);
+    const cartItem = await prisma.cartItems.findUnique({
+      where: {
+        cart_item_id,
+      },
+    });
     if (!cartItem) {
       return res.status(404).json({ message: "Cart item not found" });
     }
-    await cartItem.destroy();
-    const remainingItems = await CartItems.count({
+    await prisma.cartItems.delete({
+      where: {
+        cart_item_id,
+      },
+    });
+    const remainingItems = await prisma.cartItems.count({
       where: {
         cart_id,
       },
     });
     if (remainingItems === 0) {
-      await Carts.destroy({
+      await prisma.cart.delete({
         where: {
           cart_id,
         },
@@ -157,5 +186,5 @@ module.exports = {
   getCartItemsCount,
   addToCart,
   updateCartQuantity,
-  deleteCartItem
+  deleteCartItem,
 };
