@@ -2,7 +2,6 @@ const {
   Prisma: { PrismaClientValidationError },
 } = require("@prisma/client");
 const bcrypt = require("bcrypt");
-// const { Customers } = require("../models");
 const prisma = require("../prisma");
 const jwt = require("jsonwebtoken");
 const { validationResult } = require("express-validator");

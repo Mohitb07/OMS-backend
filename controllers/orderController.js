@@ -1,12 +1,3 @@
-// const {
-//   Customers,
-//   Orders,
-//   OrderItems,
-//   Products,
-//   Carts,
-//   CartItems,
-// } = require("../models");
-
 const prisma = require("../prisma");
 
 const getOrders = async (req, res) => {

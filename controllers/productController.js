@@ -1,4 +1,3 @@
-// const { Products } = require("../models");
 const prisma = require("../prisma");
 
 const getAllProducts = async (req, res) => {
