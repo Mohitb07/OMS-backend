@@ -2,7 +2,7 @@ const {
   Prisma: { PrismaClientValidationError },
 } = require("@prisma/client");
 const bcrypt = require("bcrypt");
-const prisma = require("../prisma");
+const prisma = require("../prismaClient");
 const jwt = require("jsonwebtoken");
 const { validationResult } = require("express-validator");
 
@@ -53,6 +53,7 @@ const register = async (req, res) => {
   try {
     const user = await prisma.customers.create({
       data: {
+        customer_id: req.body.customer_id,
         email: req.body.email,
         username: req.body.username,
         password: hashedPassword,

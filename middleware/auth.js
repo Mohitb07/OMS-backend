@@ -1,5 +1,5 @@
 // const Customers = require("../models/index").Customers;
-const prisma = require('../prisma');
+const prisma = require('../prismaClient');
 
 const jwt = require("jsonwebtoken");
 
@@ -27,7 +27,12 @@ module.exports = (req, res, next) => {
         customer_id: payload.userId,
       },
       select: {
-        password: false
+        password: false,
+        address: true,
+        username: true,
+        phone: true,
+        email: true,
+        customer_id: true,
       }
     });
     // const user = await Customer.findByPk(payload.userId);

@@ -1,4 +1,4 @@
-const prisma = require("../prisma");
+const prisma = require("../prismaClient");
 
 const getAllProducts = async (req, res) => {
   try {
@@ -32,10 +32,11 @@ const getProduct = async (req, res) => {
 };
 
 const createProduct = async (req, res) => {
-  const { name, description, price, image_url } = req.body;
+  const { product_id, name, description, price, image_url } = req.body;
   try {
     await prisma.products.create({
       data: {
+        product_id,
         name,
         description,
         price,
@@ -44,7 +45,8 @@ const createProduct = async (req, res) => {
     });
     return res.status(201).send({ message: "Product created" });
   } catch (error) {
-    return res.status(500).send({ message: "Internal server error try again" });
+    console.error(error)
+    return res.status(500).send({ message: "Internal server error try again again" });
   }
 };
 

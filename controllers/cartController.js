@@ -1,6 +1,5 @@
-// const { Customers, CartItems, Carts, Products } = require("../models");
-
-const prisma = require("../prisma");
+const prisma = require("../prismaClient");
+const { products } = prisma
 
 const getCart = async (req, res) => {
   const { customer_id } = req.user;
@@ -17,7 +16,7 @@ const getCart = async (req, res) => {
           include: {
             cart_items: {
               include: {
-                products,
+                products: true,
               },
             },
           },
@@ -38,7 +37,7 @@ const getCart = async (req, res) => {
 const getCartItemsCount = async (req, res) => {
   const { customer_id } = req.user;
   try {
-    const count = prisma.cartItems.count({
+    const count = await prisma.cartItems.count({
       where: {
         carts: {
           customer_id: customer_id,
@@ -47,7 +46,7 @@ const getCartItemsCount = async (req, res) => {
     });
     return res.status(200).send(count.toString());
   } catch (error) {
-    console.log(err);
+    console.log(error);
     return res.status(500).send({ message: "Internal server error try again" });
   }
 };
@@ -78,6 +77,7 @@ const addToCart = async (req, res) => {
         data: {
           customer_id,
           status: "active",
+          cart_id: "randomIdCart4234",
         },
       });
     }
@@ -105,6 +105,7 @@ const addToCart = async (req, res) => {
         total_amount: product_price,
         cart_id: cart.cart_id,
         product_id,
+        cart_item_id: 'cartItemIdrandom244238409'
       },
     });
 
