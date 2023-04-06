@@ -1,5 +1,5 @@
 const {
-  Prisma: { PrismaClientValidationError },
+  Prisma: { PrismaClientKnownRequestError },
 } = require("@prisma/client");
 const bcrypt = require("bcrypt");
 const prisma = require("../prismaClient");
@@ -19,8 +19,13 @@ const login = async (req, res) => {
         email,
       },
       select: {
-        password: true
-      }
+        password: true,
+        address: true,
+        username: true,
+        phone: true,
+        email: true,
+        customer_id: true,
+      },
     });
     if (!user) {
       return res.status(401).json({ message: "Invalid username or password" });
@@ -36,6 +41,7 @@ const login = async (req, res) => {
         expiresIn: "1h",
       }
     );
+    delete user["password"];
     return res.json({ user, accessToken });
   } catch (error) {
     console.log(error);
@@ -53,7 +59,6 @@ const register = async (req, res) => {
   try {
     const user = await prisma.customers.create({
       data: {
-        customer_id: req.body.customer_id,
         email: req.body.email,
         username: req.body.username,
         password: hashedPassword,
@@ -71,12 +76,11 @@ const register = async (req, res) => {
     return res.status(201).json({ user, accessToken });
   } catch (error) {
     console.log(error);
-    if (error instanceof PrismaClientValidationError) {
-      const emailError = error.validationErrors.find(
-        (err) => err.path === "email"
-      );
-      if (emailError) {
-        console.error(`Email error: ${emailError.message}`);
+    console.log('new error', error.meta.target)
+    if (error instanceof PrismaClientKnownRequestError) {
+      console.log('msg', error.message)
+      if(error.meta.target === 'email'){
+        return res.status(409).send({message: 'Email already exists'})
       }
     }
     return res.status(500).json({ message: "Something went wrong" });
