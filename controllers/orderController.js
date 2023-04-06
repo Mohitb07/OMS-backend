@@ -1,4 +1,5 @@
 const prisma = require("../prismaClient");
+const {cartItems} = prisma
 
 const getOrders = async (req, res) => {
   const { customer_id } = req.user;
@@ -12,7 +13,7 @@ const getOrders = async (req, res) => {
           include: {
             order_items: {
               include: {
-                products,
+                products: true,
               },
             },
           },
@@ -34,21 +35,21 @@ const getOrders = async (req, res) => {
 const getOrder = async (req, res) => {
   const { orderId } = req.params;
   try {
-    const customer = await prisma.orders.findUnique({
+    const orderDetail = await prisma.orders.findUnique({
       where: {
         order_id: orderId,
       },
       include: {
         order_items: {
           include: {
-            products,
+            products: true,
           },
         },
       },
     });
-    if (customer.order_items.length > 0) {
-      const orders = customer.order_items;
-      return res.status(200).send(orders);
+    console.log('orderDetail------', orderDetail)
+    if (orderDetail) {
+      return res.status(200).send(orderDetail);
     }
     return res.status(404).send({ message: "No order items found" });
   } catch (error) {
@@ -85,12 +86,16 @@ const placeOrder = async (req, res) => {
             status: "active",
           },
           include: {
-            cart_items,
+            cart_items: {
+              include: {
+                products: true
+              }
+            },
           },
         },
       },
     });
-    if (!user) {
+    if (user.carts.length === 0) {
       return res.status(404).send({ message: "User active cart not found" });
     }
 
@@ -103,7 +108,8 @@ const placeOrder = async (req, res) => {
       },
     });
 
-    const cartItems = user.carts.cart_items;
+    const cartItems = user.carts[0].cart_items;
+    console.log('cart --------------', user.carts)
     let total_order_amount = 0;
     if (cartItems) {
       total_order_amount = cartItems.reduce(
@@ -111,7 +117,7 @@ const placeOrder = async (req, res) => {
         0
       );
     }
-
+    console.log('total amount calc -------------------- ', total_order_amount)
     for (const cartItem of cartItems) {
       await prisma.orderItems.create({
         data: {
@@ -129,13 +135,13 @@ const placeOrder = async (req, res) => {
     }
     await prisma.cart.update({
       where: {
-        cart_id: user.carts.cart_id,
+        cart_id: user.carts[0].cart_id,
       },
       data: {
         status: "completed",
       },
     });
-    await prisma.orders.update({
+    const updatedOrder = await prisma.orders.update({
       where: {
         order_id: order.order_id,
       },
@@ -143,7 +149,7 @@ const placeOrder = async (req, res) => {
         total_amount: total_order_amount,
       },
     });
-    return res.status(201).send({ order });
+    return res.status(201).send({ updatedOrder });
   } catch (error) {
     console.error(error);
     return res.status(500).send({ message: "Internal server error" });
