@@ -77,7 +77,6 @@ const addToCart = async (req, res) => {
         data: {
           customer_id,
           status: "active",
-          cart_id: "randomIdCart4234",
         },
       });
     }
@@ -105,7 +104,6 @@ const addToCart = async (req, res) => {
         total_amount: product_price,
         cart_id: cart.cart_id,
         product_id,
-        cart_item_id: 'cartItemIdrandom244238409'
       },
     });
 
@@ -135,8 +133,8 @@ const updateCartQuantity = async (req, res) => {
         cart_item_id: cartItem.cart_item_id,
       },
       data: {
-        quantity,
-        total_amount: product_price * quantity,
+        quantity : Number(quantity),
+        total_amount: Number(product_price) * Number(quantity),
       },
     });
     return res.status(201).json(cartItem);
