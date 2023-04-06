@@ -32,11 +32,10 @@ const getProduct = async (req, res) => {
 };
 
 const createProduct = async (req, res) => {
-  const { product_id, name, description, price, image_url } = req.body;
+  const { name, description, price, image_url } = req.body;
   try {
     await prisma.products.create({
       data: {
-        product_id,
         name,
         description,
         price,

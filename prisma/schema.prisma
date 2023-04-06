@@ -8,11 +8,11 @@ datasource db {
 }
 
 model CartItems {
-  cart_item_id String   @id @db.VarChar(255)
+  cart_item_id String   @id @default(cuid())
   quantity     Int?
   total_amount Decimal? @db.Decimal(10, 2)
-  cart_id      String   @db.VarChar(255)
-  product_id   String   @db.VarChar(255)
+  cart_id      String   
+  product_id   String   
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   carts        Cart     @relation(fields: [cart_id], references: [cart_id], onDelete: NoAction, onUpdate: NoAction, map: "CartItems_ibfk_1")
@@ -23,9 +23,9 @@ model CartItems {
 }
 
 model Cart {
-  cart_id     String        @id @db.VarChar(255)
+  cart_id     String        @id @default(cuid())
   status      carts_status?
-  customer_id String        @db.VarChar(255)
+  customer_id String        
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
   cart_items  CartItems[]
@@ -35,22 +35,24 @@ model Cart {
 }
 
 model Customers {
-  customer_id String   @id @db.VarChar(255)
+  customer_id String   @id @default(cuid())
   username    String   @db.VarChar(255)
   phone       String?  @db.VarChar(255)
   address     String   @db.VarChar(255)
   email       String   @unique(map: "email") @db.VarChar(255)
   password    String   @db.VarChar(255)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
   carts       Cart[]
   orders      Orders[]
 }
 
 model OrderItems {
-  order_item_id String   @id @db.VarChar(255)
+  order_item_id String   @id @default(cuid())
   total_amount  Decimal  @db.Decimal(10, 2)
   quantity      Int
-  order_id      String   @db.VarChar(255)
-  product_id    String   @db.VarChar(255)
+  order_id      String   
+  product_id    String   
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   orders        Orders   @relation(fields: [order_id], references: [order_id], onDelete: NoAction, onUpdate: NoAction, map: "OrderItems_ibfk_1")
@@ -61,11 +63,11 @@ model OrderItems {
 }
 
 model Orders {
-  order_id     String         @id @db.VarChar(255)
+  order_id     String         @id @default(cuid())
   address      String?        @db.VarChar(255)
   total_amount Decimal        @db.Decimal(10, 2)
   status       orders_status?
-  customer_id  String         @db.VarChar(255)
+  customer_id  String         
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
   order_items  OrderItems[]
@@ -75,7 +77,7 @@ model Orders {
 }
 
 model Products {
-  product_id  String       @id @db.VarChar(255)
+  product_id  String       @id @default(cuid())
   name        String       @db.VarChar(255)
   description String       @db.VarChar(255)
   price       Decimal      @db.Decimal(10, 2)
