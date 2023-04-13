@@ -1,7 +1,7 @@
 const {
   Prisma: { PrismaClientKnownRequestError },
 } = require("@prisma/client");
-const bcrypt = require("bcrypt");
+const argon2 = require("argon2");
 const prisma = require("../prismaClient");
 const jwt = require("jsonwebtoken");
 const { validationResult } = require("express-validator");
@@ -30,7 +30,7 @@ const login = async (req, res) => {
     if (!user) {
       return res.status(401).json({ message: "Invalid username or password" });
     }
-    const match = await bcrypt.compare(password, user.password);
+    const match = await argon2.verify(password, user.password);
     if (!match) {
       return res.status(401).json({ message: "Invalid username or password" });
     }
@@ -54,8 +54,7 @@ const register = async (req, res) => {
   if (!errors.isEmpty()) {
     return res.status(400).json({ errors: errors.array() });
   }
-  const salt = bcrypt.genSaltSync(10);
-  const hashedPassword = bcrypt.hashSync(req.body.password, salt);
+  const hashedPassword = await argon2.hash(req.body.password);
   try {
     const user = await prisma.customers.create({
       data: {
