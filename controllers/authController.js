@@ -45,7 +45,7 @@ const login = async (req, res) => {
     return res.json({ user, accessToken });
   } catch (error) {
     console.log(error);
-    return res.status(500).json({ error: "Something went wrong" });
+    return res.status(500).json({ message: "Something went wrong" });
   }
 };
 
@@ -76,11 +76,15 @@ const register = async (req, res) => {
     return res.status(201).json({ user, accessToken });
   } catch (error) {
     console.log(error);
-    console.log('new error', error.meta.target)
+    console.log("new error", error.meta.target);
     if (error instanceof PrismaClientKnownRequestError) {
-      console.log('msg', error.message)
-      if(error.meta.target === 'email'){
-        return res.status(409).send({message: 'Email already exists'})
+      console.log("msg", error.message);
+      if (error.meta.target === "email") {
+        return res.status(409).send({
+          message: {
+            email: "Email already exists",
+          },
+        });
       }
     }
     return res.status(500).json({ message: "Something went wrong" });
