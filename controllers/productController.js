@@ -1,4 +1,5 @@
 const prisma = require("../prismaClient");
+const { cloudinary } = require("../services/cloudinary");
 
 const getAllProducts = async (req, res) => {
   try {
@@ -34,12 +35,14 @@ const getProduct = async (req, res) => {
 const createProduct = async (req, res) => {
   const { name, description, price, image_url } = req.body;
   try {
+    const resp = await cloudinary.uploader.upload(image_url, {upload_preset: 'oms'})
+    console.log('res', resp)  
     await prisma.products.create({
       data: {
         name,
         description,
         price,
-        image_url,
+        image_url: resp.public_id,
       },
     });
     return res.status(201).send({ message: "Product created" });
