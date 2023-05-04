@@ -79,7 +79,7 @@ model Orders {
 model Products {
   product_id  String       @id @default(cuid())
   name        String       @db.VarChar(255)
-  description String       @db.VarChar(255)
+  description String       @db.VarChar(1000)
   price       Decimal      @db.Decimal(10, 2)
   image_url   String       @db.VarChar(255)
   createdAt   DateTime     @default(now())
