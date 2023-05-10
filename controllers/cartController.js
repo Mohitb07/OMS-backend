@@ -1,5 +1,5 @@
 const prisma = require("../prismaClient");
-const { products } = prisma
+const { products } = prisma;
 
 const getCart = async (req, res) => {
   const { customer_id } = req.user;
@@ -128,16 +128,38 @@ const updateCartQuantity = async (req, res) => {
     if (!cartItem) {
       return res.status(404).json({ message: "Cart item not found" });
     }
-    await prisma.cartItems.update({
+
+    if (Number(quantity) === 0) {
+      await prisma.cartItems.delete({
+        where: {
+          cart_item_id: cartItem.cart_item_id,
+        },
+      });
+      const remainingItems = await prisma.cartItems.count({
+        where: {
+          cart_id,
+        },
+      });
+      if (remainingItems === 0) {
+        await prisma.cart.delete({
+          where: {
+            cart_id,
+          },
+        });
+      }
+      return res.status(200).json({message: "Cart item removed successfully"});
+    }
+    const updatedCartItem = await prisma.cartItems.update({
       where: {
         cart_item_id: cartItem.cart_item_id,
       },
       data: {
-        quantity : Number(quantity),
+        quantity: Number(quantity),
         total_amount: Number(product_price) * Number(quantity),
       },
     });
-    return res.status(201).json(cartItem);
+
+    return res.status(201).json(updatedCartItem);
   } catch (error) {
     console.error(error);
     return res.status(500).send({ message: "Internal server error" });
