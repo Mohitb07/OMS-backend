@@ -18,7 +18,7 @@ app.use(express.json());
 
 connection.connect(function (err) {
   if (err) {
-    console.error("Error connecting to MySQL database: " + process.env.MYSQLPORT);
+    console.error("Error connecting to MySQL database: " + process.env.MYSQLPORT + err);
     return;
   }
   console.log("Connected to MySQL database.");
