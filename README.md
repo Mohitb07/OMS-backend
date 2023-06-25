@@ -32,6 +32,8 @@ Start the server
 
 **Client:** JavaScript, MySql, Express JS, JWT, Prisma, Cloudinary
 
+**Hosting:** Railway
+
 ## Contributing
 
 Contributions are always welcome!
