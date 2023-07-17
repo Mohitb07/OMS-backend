@@ -2,8 +2,24 @@ const prisma = require("../prismaClient");
 const { cloudinary } = require("../services/cloudinary");
 
 const getAllProducts = async (req, res) => {
+  const { query } = req.body;
+  console.log("what is query", query);
   try {
-    const products = await prisma.products.findMany();
+    let products = [];
+    if (query) {
+      products = await prisma.products.findMany({
+        where: {
+          name: {
+            search: query,
+          },
+          description: {
+            search: query,
+          },
+        },
+      });
+    } else {
+      products = await prisma.products.findMany();
+    }
     if (products.length === 0) {
       return res.status(200).json([]);
     }
@@ -35,8 +51,10 @@ const getProduct = async (req, res) => {
 const createProduct = async (req, res) => {
   const { name, description, price, image_url } = req.body;
   try {
-    const resp = await cloudinary.uploader.upload(image_url, {upload_preset: 'oms'})
-    console.log('res', resp)  
+    const resp = await cloudinary.uploader.upload(image_url, {
+      upload_preset: "oms",
+    });
+    console.log("res", resp);
     await prisma.products.create({
       data: {
         name,
@@ -47,8 +65,10 @@ const createProduct = async (req, res) => {
     });
     return res.status(201).send({ message: "Product created" });
   } catch (error) {
-    console.error(error)
-    return res.status(500).send({ message: "Internal server error try again again" });
+    console.error(error);
+    return res
+      .status(500)
+      .send({ message: "Internal server error try again again" });
   }
 };
 
