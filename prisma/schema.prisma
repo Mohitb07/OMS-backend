@@ -1,5 +1,6 @@
 generator client {
   provider = "prisma-client-js"
+  previewFeatures = ["fullTextSearch", "fullTextIndex"]
 }
 
 datasource db {
@@ -86,6 +87,9 @@ model Products {
   updatedAt   DateTime     @updatedAt
   cart_items  CartItems[]
   order_items OrderItems[]
+
+  @@fulltext([name])
+  @@fulltext([name, description])
 }
 
 enum carts_status {
