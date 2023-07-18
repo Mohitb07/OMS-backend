@@ -1,3 +1,6 @@
+const createDOMPurify = require("dompurify");
+const { JSDOM } = require("jsdom");
+
 const prisma = require("../prismaClient");
 const { cloudinary } = require("../services/cloudinary");
 
@@ -50,6 +53,9 @@ const getProduct = async (req, res) => {
 
 const createProduct = async (req, res) => {
   const { name, description, price, image_url } = req.body;
+  const window = new JSDOM("").window;
+  const DOMPurify = createDOMPurify(window);
+  const clean = DOMPurify.sanitize(description);
   try {
     const resp = await cloudinary.uploader.upload(image_url, {
       upload_preset: "oms",
@@ -58,7 +64,7 @@ const createProduct = async (req, res) => {
     await prisma.products.create({
       data: {
         name,
-        description,
+        description: clean,
         price,
         image_url: resp.public_id,
       },
