@@ -16,7 +16,9 @@ const PORT = process.env.PORT || 3000;
 
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
-app.use(cors());
+app.use(cors({
+  origin: '*'
+}));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
@@ -89,6 +91,7 @@ app.post("/webhook", async (req, res) => {
       console.log(paymentIntent);
       const total_order_amount = paymentIntent.amount;
       const { customer_id } = paymentIntent.metadata;
+      console.log('customer id', customer_id)
       const { user } = await calculateOrderAmount(customer_id);
       const cartItems = user.carts[0].cart_items;
 
