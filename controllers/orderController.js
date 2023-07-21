@@ -2,7 +2,7 @@ const prisma = require("../prismaClient");
 const { cartItems } = prisma;
 
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
-console.log('stripe key inside orderController', process.env.STRIPE_SECRET_KEY)
+console.log("stripe key inside orderController", process.env.STRIPE_SECRET_KEY);
 
 const calculateOrderAmount = async (customer_id) => {
   const user = await prisma.customers.findUnique({
@@ -290,6 +290,12 @@ const createPaymentIntent = async (req, res) => {
   }
 };
 
+const getConfig = (req, res) => {
+  return res.send({
+    publishableKey: process.env.STRIPE_PUBLISHABLE_KEY,
+  });
+};
+
 module.exports = {
   getOrder,
   getOrders,
@@ -297,4 +303,5 @@ module.exports = {
   placeOrder,
   webhook,
   createPaymentIntent,
+  getConfig,
 };
