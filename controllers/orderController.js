@@ -1,8 +1,8 @@
-require("dotenv").config();
 const prisma = require("../prismaClient");
 const { cartItems } = prisma;
 
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+console.log('stripe key inside orderController', process.env.STRIPE_SECRET_KEY)
 
 const calculateOrderAmount = async (customer_id) => {
   const user = await prisma.customers.findUnique({
@@ -276,7 +276,7 @@ const createPaymentIntent = async (req, res) => {
       },
       // automatic_payment_methods: { enabled: true },
     });
-
+    console.log("payment intent secret", paymentIntent.client_secret);
     res.send({
       clientSecret: paymentIntent.client_secret,
     });
