@@ -1,6 +1,6 @@
 const express = require("express");
 const auth = require("../middleware/auth");
-const orderController = require('../controllers/orderController')
+const orderController = require("../controllers/orderController");
 
 const router = new express.Router();
 
@@ -12,4 +12,8 @@ router.get("/order_count", auth, orderController.getOrdersCount);
 
 router.post("/orders", auth, orderController.placeOrder);
 
-module.exports = router
+router.post("/webhook", orderController.webhook);
+
+router.post("/create-payment-intent", orderController.createPaymentIntent);
+
+module.exports = router;
