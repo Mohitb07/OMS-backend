@@ -30,7 +30,7 @@ Start the server
 
 ## Tech Stack
 
-**Client:** JavaScript, MySql, Express JS, JWT, Prisma, Cloudinary
+**Client:** JavaScript, MySql, Express JS, JWT, Prisma, Cloudinary, Stripe
 
 **Hosting:** Railway
 
