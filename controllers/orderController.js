@@ -244,8 +244,8 @@ const webhook = async (req, res) => {
               status: "completed",
             },
           });
+          return res.status(201).send({ order });
         });
-        return res.status(201).send({ order });
       } catch (error) {
         console.error(error);
         return res.status(500).send({ message: "Internal server error" });
