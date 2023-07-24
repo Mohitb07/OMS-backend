@@ -15,7 +15,6 @@ const PORT = process.env.PORT || 3000;
 const env = process.env.NODE_ENV || "development";
 const corsOptions = corsConfig[env];
 
-console.log("stripe key in index", process.env.STRIPE_SECRET_KEY);
 app.use(cors(corsOptions));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
