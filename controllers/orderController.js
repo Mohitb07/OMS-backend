@@ -2,7 +2,6 @@ const prisma = require("../prismaClient");
 const { cartItems } = prisma;
 
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
-console.log("stripe key inside orderController", process.env.STRIPE_SECRET_KEY);
 
 const calculateOrderAmount = async (customer_id) => {
   const user = await prisma.customers.findUnique({
@@ -207,50 +206,82 @@ const webhook = async (req, res) => {
       const total_order_amount = paymentIntent.amount;
       const { customer_id } = paymentIntent.metadata;
       console.log("customer id", customer_id);
-      const { user } = await calculateOrderAmount(customer_id);
-      const cartItems = user.carts[0].cart_items;
 
-      const order = await prisma.orders.create({
-        data: {
-          customer_id,
-          total_amount: total_order_amount / 100,
-          status: "pending",
-          address: user.address,
-        },
-      });
+      try {
+        await prisma.$transaction(async (transaction) => {
+          const { user } = await calculateOrderAmount(customer_id);
+          const cartItems = user.carts[0].cart_items;
 
-      for (const cartItem of cartItems) {
-        await prisma.orderItems.create({
-          data: {
-            order_id: order.order_id,
-            product_id: cartItem.product_id,
-            quantity: cartItem.quantity,
-            total_amount: cartItem.total_amount,
-          },
+          const order = await transaction.orders.create({
+            data: {
+              customer_id,
+              total_amount: total_order_amount / 100,
+              status: "pending",
+              address: user.address,
+            },
+          });
+
+          await transaction.orderItems.createMany({
+            data: cartItems.map((cartItem) => ({
+              order_id: order.order_id,
+              product_id: cartItem.product_id,
+              quantity: cartItem.quantity,
+              total_amount: cartItem.total_amount,
+            })),
+          });
+          await transaction.cartItems.deleteMany({
+            where: {
+              cart_item_id: {
+                in: cartItems.map((cartItem) => cartItem.cart_item_id),
+              },
+            },
+          });
+          await transaction.cart.update({
+            where: {
+              cart_id: user.carts[0].cart_id,
+            },
+            data: {
+              status: "completed",
+            },
+          });
         });
-        await prisma.cartItems.delete({
-          where: {
-            cart_item_id: cartItem.cart_item_id,
-          },
-        });
+        return res.status(201).send({ order });
+      } catch (error) {
+        console.error(error);
+        return res.status(500).send({ message: "Internal server error" });
       }
-      await prisma.cart.update({
-        where: {
-          cart_id: user.carts[0].cart_id,
-        },
-        data: {
-          status: "completed",
-        },
-      });
-      const updatedOrder = await prisma.orders.update({
-        where: {
-          order_id: order.order_id,
-        },
-        data: {
-          total_amount: total_order_amount / 100,
-        },
-      });
-      return res.status(201).send({ updatedOrder });
+
+    // for (const cartItem of cartItems) {
+    //   await prisma.orderItems.create({
+    //     data: {
+    //       order_id: order.order_id,
+    //       product_id: cartItem.product_id,
+    //       quantity: cartItem.quantity,
+    //       total_amount: cartItem.total_amount,
+    //     },
+    //   });
+    //   await prisma.cartItems.delete({
+    //     where: {
+    //       cart_item_id: cartItem.cart_item_id,
+    //     },
+    //   });
+    // }
+    // await prisma.cart.update({
+    //   where: {
+    //     cart_id: user.carts[0].cart_id,
+    //   },
+    //   data: {
+    //     status: "completed",
+    //   },
+    // });
+    // const updatedOrder = await prisma.orders.update({
+    //   where: {
+    //     order_id: order.order_id,
+    //   },
+    //   data: {
+    //     total_amount: total_order_amount / 100,
+    //   },
+    // });
     case "payment_itent.payment_failed":
       const paymentIntentFailed = event.data.object;
       console.log("PaymentIntent was failed!");
