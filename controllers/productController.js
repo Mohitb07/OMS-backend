@@ -6,7 +6,6 @@ const { cloudinary } = require("../services/cloudinary");
 
 const getAllProducts = async (req, res) => {
   const { query } = req.body;
-  console.log("what is query", query);
   try {
     let products = [];
     if (query) {
@@ -60,7 +59,6 @@ const createProduct = async (req, res) => {
     const resp = await cloudinary.uploader.upload(image_url, {
       upload_preset: "oms",
     });
-    console.log("res", resp);
     await prisma.products.create({
       data: {
         name,

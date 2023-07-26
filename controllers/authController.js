@@ -2,9 +2,10 @@ const {
   Prisma: { PrismaClientKnownRequestError },
 } = require("@prisma/client");
 const bcrypt = require("bcrypt");
-const prisma = require("../prismaClient");
 const jwt = require("jsonwebtoken");
 const { validationResult } = require("express-validator");
+
+const prisma = require("../prismaClient");
 
 const login = async (req, res) => {
   const { email, password } = req.body;
@@ -75,7 +76,6 @@ const register = async (req, res) => {
     );
     return res.status(201).json({ user, accessToken });
   } catch (error) {
-    console.log(error);
     console.log("new error", error.meta.target);
     if (error instanceof PrismaClientKnownRequestError) {
       console.log("msg", error.message);

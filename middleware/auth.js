@@ -1,7 +1,7 @@
 // const Customers = require("../models/index").Customers;
-const prisma = require('../prismaClient');
-
 const jwt = require("jsonwebtoken");
+
+const prisma = require('../prismaClient');
 
 module.exports = (req, res, next) => {
   // Extract the access token from the Authorization header

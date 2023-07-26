@@ -61,7 +61,6 @@ const getOrders = async (req, res) => {
     });
     if (customer.orders.length > 0) {
       const orders = customer.orders;
-      console.log(orders);
       return res.status(200).send(orders);
     }
     return res.status(200).send([]);
@@ -86,7 +85,6 @@ const getOrder = async (req, res) => {
         },
       },
     });
-    console.log("orderDetail------", orderDetail);
     if (orderDetail) {
       return res.status(200).send(orderDetail);
     }
@@ -148,7 +146,6 @@ const placeOrder = async (req, res) => {
     });
 
     const cartItems = user.carts[0].cart_items;
-    console.log("cart --------------", user.carts);
     let total_order_amount = 0;
     if (cartItems) {
       total_order_amount = cartItems.reduce(
@@ -156,7 +153,6 @@ const placeOrder = async (req, res) => {
         0
       );
     }
-    console.log("total amount calc -------------------- ", total_order_amount);
     for (const cartItem of cartItems) {
       await prisma.orderItems.create({
         data: {
@@ -201,11 +197,9 @@ const webhook = async (req, res) => {
   switch (event.type) {
     case "payment_intent.succeeded":
       const paymentIntent = event.data.object;
-      console.log("PaymentIntent was successful!");
-      console.log(paymentIntent);
+      console.log("PaymentIntent was successful!", paymentIntent);
       const total_order_amount = paymentIntent.amount;
       const { customer_id } = paymentIntent.metadata;
-      console.log("customer id", customer_id);
 
       try {
         await prisma.$transaction(async (transaction) => {
@@ -250,42 +244,9 @@ const webhook = async (req, res) => {
         console.error(error);
         return res.status(500).send({ message: "Internal server error" });
       }
-
-    // for (const cartItem of cartItems) {
-    //   await prisma.orderItems.create({
-    //     data: {
-    //       order_id: order.order_id,
-    //       product_id: cartItem.product_id,
-    //       quantity: cartItem.quantity,
-    //       total_amount: cartItem.total_amount,
-    //     },
-    //   });
-    //   await prisma.cartItems.delete({
-    //     where: {
-    //       cart_item_id: cartItem.cart_item_id,
-    //     },
-    //   });
-    // }
-    // await prisma.cart.update({
-    //   where: {
-    //     cart_id: user.carts[0].cart_id,
-    //   },
-    //   data: {
-    //     status: "completed",
-    //   },
-    // });
-    // const updatedOrder = await prisma.orders.update({
-    //   where: {
-    //     order_id: order.order_id,
-    //   },
-    //   data: {
-    //     total_amount: total_order_amount / 100,
-    //   },
-    // });
     case "payment_itent.payment_failed":
       const paymentIntentFailed = event.data.object;
-      console.log("PaymentIntent was failed!");
-      console.log(paymentIntentFailed);
+      console.log("PaymentIntent was failed!", paymentIntentFailed);
       return res.status(400).end();
     // ... handle other event types
     default:
