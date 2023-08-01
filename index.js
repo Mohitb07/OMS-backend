@@ -22,7 +22,7 @@ app.use(express.json());
 connection.connect(function (err) {
   if (err) {
     console.error(
-      "Error connecting to MySQL database: " + process.env.MYSQLPORT + err
+      "Error connecting to MySQL database: "
     );
     return;
   }
