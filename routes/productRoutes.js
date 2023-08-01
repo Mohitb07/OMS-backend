@@ -9,6 +9,6 @@ router.post("/products", productController.getAllProducts);
 
 router.get("/products/:productId", productController.getProduct);
 
-router.post("/product", auth, productController.createProduct);
+router.post("/product", productController.createProduct);
 
 module.exports = router
