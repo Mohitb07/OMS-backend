@@ -1,4 +1,14 @@
 const prisma = require("../prismaClient");
+const Pusher = require("pusher");
+
+const pusher = new Pusher({
+  appId: process.env.PUSHER_APP_ID,
+  key: process.env.PUSHER_APP_KEY,
+  secret: process.env.PUSHER_SECRET,
+  cluster: process.env.PUSHER_APP_CLUSTER,
+  useTLS: true,
+});
+
 const { cartItems } = prisma;
 
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
@@ -238,15 +248,25 @@ const webhook = async (req, res) => {
               status: "completed",
             },
           });
+          pusher.trigger(customer_id, "order", {
+            message: "success",
+          });
           return res.status(201).send({ order });
         });
       } catch (error) {
+        pusher.trigger(customer_id, "order", {
+          message: "error",
+        });
         console.error(error);
         return res.status(500).send({ message: "Internal server error" });
       }
     case "payment_itent.payment_failed":
       const paymentIntentFailed = event.data.object;
+      const { cust_id } = paymentIntentFailed.metadata;
       console.log("PaymentIntent was failed!", paymentIntentFailed);
+      pusher.trigger(cust_id, "order", {
+        message: "error",
+      });
       return res.status(400).end();
     // ... handle other event types
     default:
