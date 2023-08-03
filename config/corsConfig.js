@@ -6,9 +6,7 @@ const devCorsOptions = {
 };
 
 const prodCorsOptions = {
-  origin: "https://wondrmart.netlify.app", // Replace with your production frontend URL
-  methods: "GET,PUT,POST,DELETE,PATCH",
-  allowedHeaders: "Content-Type,Authorization",
+  origin: "*", // Replace with your production frontend URL
 };
 
 module.exports = {
