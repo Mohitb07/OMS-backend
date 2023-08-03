@@ -262,7 +262,7 @@ const webhook = async (req, res) => {
       }
     case "payment_itent.payment_failed":
       const paymentIntentFailed = event.data.object;
-      const { cust_id } = paymentIntentFailed.metadata;
+      const { customer_id: cust_id } = paymentIntentFailed.metadata;
       console.log("PaymentIntent was failed!", paymentIntentFailed);
       pusher.trigger(cust_id, "order", {
         message: "error",
