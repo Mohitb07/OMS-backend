@@ -203,58 +203,6 @@ const placeOrder = async (req, res) => {
   }
 };
 
-const createOrder = async (customer_id, total_order_amount) => {
-  try {
-    await prisma.$transaction(async (transaction) => {
-      const { user } = await calculateOrderAmount(customer_id);
-      const cartItems = user.carts[0].cart_items;
-
-      const order = await transaction.orders.create({
-        data: {
-          customer_id,
-          total_amount: total_order_amount / 100,
-          status: "pending",
-          address: user.address,
-        },
-      });
-
-      await transaction.orderItems.createMany({
-        data: cartItems.map((cartItem) => ({
-          order_id: order.order_id,
-          product_id: cartItem.product_id,
-          quantity: cartItem.quantity,
-          total_amount: cartItem.total_amount,
-        })),
-      });
-      await transaction.cartItems.deleteMany({
-        where: {
-          cart_item_id: {
-            in: cartItems.map((cartItem) => cartItem.cart_item_id),
-          },
-        },
-      });
-      await transaction.cart.update({
-        where: {
-          cart_id: user.carts[0].cart_id,
-        },
-        data: {
-          status: "completed",
-        },
-      });
-      // pusher.trigger(customer_id, "order", {
-      //   message: "success",
-      // });
-      return res.status(201).send({ order });
-    });
-  } catch (error) {
-    // pusher.trigger(customer_id, "order", {
-    //   message: "error",
-    // });
-    console.error(error);
-    return res.status(500).send({ message: "Internal server error" });
-  }
-};
-
 const webhook = async (req, res) => {
   const event = req.body;
   // Handle the event
@@ -265,24 +213,59 @@ const webhook = async (req, res) => {
 
       stripe.customers.retrieve(data.customer, async (err, customer) => {
         if (err) {
-          console.log(err);
+          console.log("stripe error :>> ", err);
         } else {
-          const { customer_id } = customer.metadata;
-          await createOrder(customer_id, data.amount);
-          console.log('order created')
+          try {
+            const { customer_id } = customer.metadata;
+            await prisma.$transaction(async (transaction) => {
+              const { user } = await calculateOrderAmount(customer_id);
+              const cartItems = user.carts[0].cart_items;
+
+              const order = await transaction.orders.create({
+                data: {
+                  customer_id,
+                  total_amount: data.amount_total / 100,
+                  status: "pending",
+                  address: user.address,
+                },
+              });
+
+              await transaction.orderItems.createMany({
+                data: cartItems.map((cartItem) => ({
+                  order_id: order.order_id,
+                  product_id: cartItem.product_id,
+                  quantity: cartItem.quantity,
+                  total_amount: cartItem.total_amount,
+                })),
+              });
+              await transaction.cartItems.deleteMany({
+                where: {
+                  cart_item_id: {
+                    in: cartItems.map((cartItem) => cartItem.cart_item_id),
+                  },
+                },
+              });
+              await transaction.cart.update({
+                where: {
+                  cart_id: user.carts[0].cart_id,
+                },
+                data: {
+                  status: "completed",
+                },
+              });
+              console.log("order created successfully");
+              return res.status(201).send({ order });
+            });
+          } catch (error) {
+            console.error("error while creating order", error);
+            return res.status(500).send({ message: "Internal server error" });
+          }
         }
       });
-      return res.status(200).end();
-    // const total_order_amount = paymentIntent.amount;
-    // const { customer_id } = paymentIntent.metadata;
-    // await createOrder(customer_id, total_order_amount);
     case "checkout.session.failed":
       const paymentIntentFailed = event.data.object;
       const { customer_id: cust_id } = paymentIntentFailed.metadata;
       console.log("PaymentIntent was failed!", paymentIntentFailed);
-      // pusher.trigger(cust_id, "order", {
-      //   message: "error",
-      // });
       return res.status(400).end();
     // ... handle other event types
     default:
