@@ -269,9 +269,10 @@ const webhook = async (req, res) => {
         } else {
           const { customer_id } = customer.metadata;
           await createOrder(customer_id, data.amount);
+          console.log('order created')
         }
       });
-
+      return res.status(200).end();
     // const total_order_amount = paymentIntent.amount;
     // const { customer_id } = paymentIntent.metadata;
     // await createOrder(customer_id, total_order_amount);
@@ -279,9 +280,9 @@ const webhook = async (req, res) => {
       const paymentIntentFailed = event.data.object;
       const { customer_id: cust_id } = paymentIntentFailed.metadata;
       console.log("PaymentIntent was failed!", paymentIntentFailed);
-      pusher.trigger(cust_id, "order", {
-        message: "error",
-      });
+      // pusher.trigger(cust_id, "order", {
+      //   message: "error",
+      // });
       return res.status(400).end();
     // ... handle other event types
     default:
