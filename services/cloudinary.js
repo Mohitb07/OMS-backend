@@ -6,4 +6,14 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-module.exports = { cloudinary };
+async function getCloudinaryImageURL(cloudinaryString) {
+  try {
+    const imageDetails = await cloudinary.api.resource(cloudinaryString);
+    return imageDetails.secure_url;
+  } catch (error) {
+    console.error('Error fetching Cloudinary image details:', error);
+    return null;
+  }
+}
+
+module.exports = { cloudinary, getCloudinaryImageURL };
