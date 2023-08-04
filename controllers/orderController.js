@@ -267,10 +267,6 @@ const webhook = async (req, res) => {
       const { customer_id: cust_id } = paymentIntentFailed.metadata;
       console.log("PaymentIntent was failed!", paymentIntentFailed);
       return res.status(400).end();
-    // ... handle other event types
-    default:
-      // Unexpected event type
-      return res.status(400).end();
   }
 };
 
@@ -395,7 +391,7 @@ const createCheckoutSession = async (req, res) => {
     cancel_url: `${process.env.CLIENT_URL}/cancel`,
   });
 
-  res.send({
+  return res.send({
     url: session.url,
   });
 };
