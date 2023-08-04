@@ -1,5 +1,7 @@
 const prisma = require("../prismaClient");
 const Pusher = require("pusher");
+const { getCloudinaryImageURL } = require("../services/cloudinary");
+const { sanitizeHTMl, sanitizeHTML } = require("../services/sanitizeHTML");
 
 const pusher = new Pusher({
   appId: "1645752",
@@ -201,66 +203,79 @@ const placeOrder = async (req, res) => {
   }
 };
 
+const createOrder = async (customer_id, total_order_amount) => {
+  try {
+    await prisma.$transaction(async (transaction) => {
+      const { user } = await calculateOrderAmount(customer_id);
+      const cartItems = user.carts[0].cart_items;
+
+      const order = await transaction.orders.create({
+        data: {
+          customer_id,
+          total_amount: total_order_amount / 100,
+          status: "pending",
+          address: user.address,
+        },
+      });
+
+      await transaction.orderItems.createMany({
+        data: cartItems.map((cartItem) => ({
+          order_id: order.order_id,
+          product_id: cartItem.product_id,
+          quantity: cartItem.quantity,
+          total_amount: cartItem.total_amount,
+        })),
+      });
+      await transaction.cartItems.deleteMany({
+        where: {
+          cart_item_id: {
+            in: cartItems.map((cartItem) => cartItem.cart_item_id),
+          },
+        },
+      });
+      await transaction.cart.update({
+        where: {
+          cart_id: user.carts[0].cart_id,
+        },
+        data: {
+          status: "completed",
+        },
+      });
+      // pusher.trigger(customer_id, "order", {
+      //   message: "success",
+      // });
+      return res.status(201).send({ order });
+    });
+  } catch (error) {
+    // pusher.trigger(customer_id, "order", {
+    //   message: "error",
+    // });
+    console.error(error);
+    return res.status(500).send({ message: "Internal server error" });
+  }
+};
+
 const webhook = async (req, res) => {
   const event = req.body;
   // Handle the event
   switch (event.type) {
-    case "payment_intent.succeeded":
-      const paymentIntent = event.data.object;
-      console.log("PaymentIntent was successful!", paymentIntent);
-      const total_order_amount = paymentIntent.amount;
-      const { customer_id } = paymentIntent.metadata;
+    case "checkout.session.completed":
+      const data = event.data.object;
+      console.log("Checkout session completed!", data);
 
-      try {
-        await prisma.$transaction(async (transaction) => {
-          const { user } = await calculateOrderAmount(customer_id);
-          const cartItems = user.carts[0].cart_items;
+      stripe.customers.retrieve(data.customer, async (err, customer) => {
+        if (err) {
+          console.log(err);
+        } else {
+          const { customer_id } = customer.metadata;
+          await createOrder(customer_id, data.amount);
+        }
+      });
 
-          const order = await transaction.orders.create({
-            data: {
-              customer_id,
-              total_amount: total_order_amount / 100,
-              status: "pending",
-              address: user.address,
-            },
-          });
-
-          await transaction.orderItems.createMany({
-            data: cartItems.map((cartItem) => ({
-              order_id: order.order_id,
-              product_id: cartItem.product_id,
-              quantity: cartItem.quantity,
-              total_amount: cartItem.total_amount,
-            })),
-          });
-          await transaction.cartItems.deleteMany({
-            where: {
-              cart_item_id: {
-                in: cartItems.map((cartItem) => cartItem.cart_item_id),
-              },
-            },
-          });
-          await transaction.cart.update({
-            where: {
-              cart_id: user.carts[0].cart_id,
-            },
-            data: {
-              status: "completed",
-            },
-          });
-          pusher.trigger(customer_id, "order", {
-            message: "success",
-          });
-          return res.status(201).send({ order });
-        });
-      } catch (error) {
-        pusher.trigger(customer_id, "order", {
-          message: "error",
-        });
-        console.error(error);
-        return res.status(500).send({ message: "Internal server error" });
-      }
-    case "payment_itent.payment_failed":
+    // const total_order_amount = paymentIntent.amount;
+    // const { customer_id } = paymentIntent.metadata;
+    // await createOrder(customer_id, total_order_amount);
+    case "checkout.session.failed":
       const paymentIntentFailed = event.data.object;
       const { customer_id: cust_id } = paymentIntentFailed.metadata;
       console.log("PaymentIntent was failed!", paymentIntentFailed);
@@ -275,36 +290,129 @@ const webhook = async (req, res) => {
   }
 };
 
-const createPaymentIntent = async (req, res) => {
-  try {
-    const { customer_id } = req.body;
-    const { total_order_amount } = await calculateOrderAmount(customer_id);
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: total_order_amount * 100,
-      currency: "inr",
-      payment_method_types: ["card"],
-      metadata: {
-        customer_id,
-      },
-      // automatic_payment_methods: { enabled: true },
-    });
-    console.log("payment intent secret", paymentIntent.client_secret);
-    res.send({
-      clientSecret: paymentIntent.client_secret,
-    });
-  } catch (error) {
-    console.log(error);
-    return res.status(400).send({
-      error: {
-        message: error.message,
-      },
-    });
-  }
-};
+// const createPaymentIntent = async (req, res) => {
+//   try {
+//     const { customer_id } = req.body;
+//     const { total_order_amount } = await calculateOrderAmount(customer_id);
+//     const paymentIntent = await stripe.paymentIntents.create({
+//       amount: total_order_amount * 100,
+//       currency: "inr",
+//       payment_method_types: ["card"],
+//       metadata: {
+//         customer_id,
+//       },
+//       // automatic_payment_methods: { enabled: true },
+//     });
+//     console.log("payment intent secret", paymentIntent.client_secret);
+//     res.send({
+//       clientSecret: paymentIntent.client_secret,
+//     });
+//   } catch (error) {
+//     console.log(error);
+//     return res.status(400).send({
+//       error: {
+//         message: error.message,
+//       },
+//     });
+//   }
+// };
 
-const getConfig = (req, res) => {
-  return res.send({
-    publishableKey: process.env.STRIPE_PUBLISHABLE_KEY,
+// const getConfig = (req, res) => {
+//   return res.send({
+//     publishableKey: process.env.STRIPE_PUBLISHABLE_KEY,
+//   });
+// };
+
+const createCheckoutSession = async (req, res) => {
+  const { customer_id } = req.user;
+  const { user } = await calculateOrderAmount(customer_id);
+  const customer = await stripe.customers.create({
+    metadata: {
+      customer_id,
+      // cart: JSON.stringify(user.carts[0].cart_items),
+    },
+  });
+
+  const productImagesPromises = user.carts[0].cart_items.map((item) =>
+    getCloudinaryImageURL(item.products.image_url)
+  );
+
+  const productImages = await Promise.all(productImagesPromises);
+
+  const lineItems = user.carts[0].cart_items.map((cartItem, idx) => ({
+    price_data: {
+      currency: "inr",
+      product_data: {
+        name: cartItem.products.name,
+        images: [productImages[idx]],
+        description: sanitizeHTML(cartItem.products.description),
+        metadata: {
+          product_id: cartItem.product_id,
+        },
+      },
+      unit_amount: cartItem.products.price * 100,
+    },
+    quantity: cartItem.quantity,
+  }));
+
+  const session = await stripe.checkout.sessions.create({
+    payment_method_types: ["card"],
+    line_items: lineItems,
+    shipping_options: [
+      {
+        shipping_rate_data: {
+          type: "fixed_amount",
+          fixed_amount: {
+            amount: 0,
+            currency: "inr",
+          },
+          display_name: "Free shipping",
+          // Delivers between 5-7 business days
+          delivery_estimate: {
+            minimum: {
+              unit: "business_day",
+              value: 2,
+            },
+            maximum: {
+              unit: "business_day",
+              value: 3,
+            },
+          },
+        },
+      },
+      // {
+      //   shipping_rate_data: {
+      //     type: "fixed_amount",
+      //     fixed_amount: {
+      //       amount: 1500,
+      //       currency: "usd",
+      //     },
+      //     display_name: "Next day air",
+      //     // Delivers in exactly 1 business day
+      //     delivery_estimate: {
+      //       minimum: {
+      //         unit: "business_day",
+      //         value: 1,
+      //       },
+      //       maximum: {
+      //         unit: "business_day",
+      //         value: 1,
+      //       },
+      //     },
+      //   },
+      // },
+    ],
+    phone_number_collection: {
+      enabled: true,
+    },
+    mode: "payment",
+    customer: customer.id,
+    success_url: `${process.env.CLIENT_URL}/complete`,
+    cancel_url: `${process.env.CLIENT_URL}/cancel`,
+  });
+
+  res.send({
+    url: session.url,
   });
 };
 
@@ -314,6 +422,7 @@ module.exports = {
   getOrdersCount,
   placeOrder,
   webhook,
-  createPaymentIntent,
-  getConfig,
+  // createPaymentIntent,
+  // getConfig,
+  createCheckoutSession,
 };
