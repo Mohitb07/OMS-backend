@@ -255,7 +255,9 @@ const webhook = async (req, res) => {
               });
               console.log("order created successfully");
             });
-            return res.status(200).end();
+            return res
+              .status(200)
+              .send({ message: "order created successfully" });
           } catch (error) {
             console.error("error while creating order", error);
             return res.status(500).send({ message: "Internal server error" });
