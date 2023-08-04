@@ -15,8 +15,10 @@ router.post("/orders", auth, orderController.placeOrder);
 
 router.post("/webhook", orderController.webhook);
 
-router.post("/create-payment-intent", orderController.createPaymentIntent);
+// router.post("/create-payment-intent", orderController.createPaymentIntent);
 
-router.get("/config", orderController.getConfig);
+router.post('/create-checkout-session',auth, orderController.createCheckoutSession)
+
+// router.get("/config", orderController.getConfig);
 
 module.exports = router;
