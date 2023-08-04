@@ -6,7 +6,10 @@ const devCorsOptions = {
 };
 
 const prodCorsOptions = {
-  origin: "*", // Replace with your production frontend URL
+  origin: process.env.CLIENT_URL, // Replace with your production frontend URL
+  methods: "GET,PUT,POST,DELETE,PATCH",
+  allowedHeaders: "Content-Type,Authorization",
+  credentials: true,
 };
 
 module.exports = {
