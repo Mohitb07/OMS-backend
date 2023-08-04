@@ -17,7 +17,7 @@ router.post("/webhook", orderController.webhook);
 
 // router.post("/create-payment-intent", orderController.createPaymentIntent);
 
-router.post('/create-checkout-session',auth, orderController.createCheckoutSession)
+router.post('/create-checkout-session', orderController.createCheckoutSession)
 
 // router.get("/config", orderController.getConfig);
 

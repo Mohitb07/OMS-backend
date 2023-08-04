@@ -308,7 +308,7 @@ const webhook = async (req, res) => {
 // };
 
 const createCheckoutSession = async (req, res) => {
-  const { customer_id } = req.user;
+  const { customer_id } = req.body;
   const { user } = await calculateOrderAmount(customer_id);
   const customer = await stripe.customers.create({
     metadata: {
