@@ -26,7 +26,7 @@ const options = {
 app.use(cors(corsOptions));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
-app.use("/api/inngest", serve(inngest, [handleOrder]), options);
+app.use("/api/inngest", serve(inngest, [handleOrder], options));
 
 connection.connect(function (err) {
   if (err) {
