@@ -18,10 +18,15 @@ const PORT = process.env.PORT || 3000;
 const env = process.env.NODE_ENV || "development";
 const corsOptions = corsConfig[env];
 
+const options = {
+  signingKey:
+    "signkey-prod-d1e105562a7218bf5c6f69865e2a1c60bd46580ab974628c06bc3091fd1ffeaa",
+};
+
 app.use(cors(corsOptions));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
-app.use("/api/inngest", serve(inngest, [handleOrder]));
+app.use("/api/inngest", serve(inngest, [handleOrder]), options);
 
 connection.connect(function (err) {
   if (err) {
