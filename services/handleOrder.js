@@ -5,6 +5,7 @@ const handleOrder = inngest.createFunction(
   { name: "Create order" },
   { event: "shop/order.created" },
   async ({ event, step, prisma }) => {
+    console.log('triggering handleOrder')
     const customer_id = event.data.customer_id;
     await prisma.$transaction(async (transaction) => {
       const { user } = await getUser(customer_id);

@@ -204,6 +204,7 @@ const webhook = async (req, res) => {
               total_amount: data.amount_total,
             },
           });
+          console.log('called inngest event')
         } catch (err) {
           console.log(err);
         }
