@@ -1,7 +1,8 @@
 const prisma = require("../prismaClient");
 const Pusher = require("pusher");
 const { getCloudinaryImageURL } = require("../services/cloudinary");
-const { sanitizeHTMl, sanitizeHTML } = require("../services/sanitizeHTML");
+const { sanitizeHTML } = require("../services/sanitizeHTML");
+const { inngest } = require("../services/inngest");
 
 const pusher = new Pusher({
   appId: "1645752",
@@ -15,7 +16,7 @@ const { cartItems } = prisma;
 
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
-const calculateOrderAmount = async (customer_id) => {
+const getUser = async (customer_id) => {
   const user = await prisma.customers.findUnique({
     where: {
       customer_id,
@@ -38,17 +39,8 @@ const calculateOrderAmount = async (customer_id) => {
   if (user.carts.length === 0) {
     return res.status(404).send({ message: "User active cart not found" });
   }
-  const cartItems = user.carts[0].cart_items;
-  let total_order_amount = 0;
-  if (cartItems) {
-    total_order_amount = cartItems.reduce(
-      (acc, currItem) => acc + Number(currItem.total_amount),
-      0
-    );
-  }
   return {
     user,
-    total_order_amount,
   };
 };
 
@@ -122,194 +114,111 @@ const getOrdersCount = async (req, res) => {
   }
 };
 
-const placeOrder = async (req, res) => {
-  const { customer_id } = req.user;
-  try {
-    const user = await prisma.customers.findUnique({
-      where: {
-        customer_id,
-      },
-      include: {
-        carts: {
-          where: {
-            status: "active",
-          },
-          include: {
-            cart_items: {
-              include: {
-                products: true,
-              },
-            },
-          },
-        },
-      },
-    });
-    if (user.carts.length === 0) {
-      return res.status(404).send({ message: "User active cart not found" });
-    }
+// const webhook = async (req, res) => {
+//   const event = req.body;
+//   // Handle the event
+//   switch (event.type) {
+//     case "checkout.session.completed":
+//       const data = event.data.object;
+//     // await inngest.send({
+//     //   name: "shop/order.created",
+//     //   data: {
+//     //     customer_id: data.metadata.customer_id,
+//     //     total_amount: data.amount_total,
+//     //   },
+//     // });
 
-    const order = await prisma.orders.create({
-      data: {
-        customer_id,
-        total_amount: 0,
-        status: "pending",
-        address: user.address,
-      },
-    });
+//     // stripe.customers.retrieve(data.customer, async (err, customer) => {
+//     //   if (err) {
+//     //     console.log("stripe error :>> ", err);
+//     //   } else {
+//     //     try {
 
-    const cartItems = user.carts[0].cart_items;
-    let total_order_amount = 0;
-    if (cartItems) {
-      total_order_amount = cartItems.reduce(
-        (acc, currItem) => acc + Number(currItem.total_amount),
-        0
-      );
-    }
-    for (const cartItem of cartItems) {
-      await prisma.orderItems.create({
-        data: {
-          order_id: order.order_id,
-          product_id: cartItem.product_id,
-          quantity: cartItem.quantity,
-          total_amount: cartItem.total_amount,
-        },
-      });
-      await prisma.cartItems.delete({
-        where: {
-          cart_item_id: cartItem.cart_item_id,
-        },
-      });
-    }
-    await prisma.cart.update({
-      where: {
-        cart_id: user.carts[0].cart_id,
-      },
-      data: {
-        status: "completed",
-      },
-    });
-    const updatedOrder = await prisma.orders.update({
-      where: {
-        order_id: order.order_id,
-      },
-      data: {
-        total_amount: total_order_amount,
-      },
-    });
-    return res.status(201).send({ updatedOrder });
-  } catch (error) {
-    console.error(error);
-    return res.status(500).send({ message: "Internal server error" });
-  }
-};
+//     //       return res.status(200).end();
+//     //       // const { customer_id } = customer.metadata;
+//     //       // await prisma.$transaction(async (transaction) => {
+//     //       //   const { user } = await getUser(customer_id);
+//     //       //   const cartItems = user.carts[0].cart_items;
 
-const webhook = async (req, res) => {
-  const event = req.body;
-  // Handle the event
-  switch (event.type) {
-    case "checkout.session.completed":
-      const data = event.data.object;
-      console.log("Checkout session completed!", data);
+//     //       //   const order = await transaction.orders.create({
+//     //       //     data: {
+//     //       //       customer_id,
+//     //       //       total_amount: data.amount_total / 100,
+//     //       //       status: "pending",
+//     //       //       address: user.address,
+//     //       //     },
+//     //       //   });
 
-      stripe.customers.retrieve(data.customer, async (err, customer) => {
-        if (err) {
-          console.log("stripe error :>> ", err);
-        } else {
-          try {
-            const { customer_id } = customer.metadata;
-            await prisma.$transaction(async (transaction) => {
-              const { user } = await calculateOrderAmount(customer_id);
-              const cartItems = user.carts[0].cart_items;
-
-              const order = await transaction.orders.create({
-                data: {
-                  customer_id,
-                  total_amount: data.amount_total / 100,
-                  status: "pending",
-                  address: user.address,
-                },
-              });
-
-              await transaction.orderItems.createMany({
-                data: cartItems.map((cartItem) => ({
-                  order_id: order.order_id,
-                  product_id: cartItem.product_id,
-                  quantity: cartItem.quantity,
-                  total_amount: cartItem.total_amount,
-                })),
-              });
-              await transaction.cartItems.deleteMany({
-                where: {
-                  cart_item_id: {
-                    in: cartItems.map((cartItem) => cartItem.cart_item_id),
-                  },
-                },
-              });
-              await transaction.cart.update({
-                where: {
-                  cart_id: user.carts[0].cart_id,
-                },
-                data: {
-                  status: "completed",
-                },
-              });
-              console.log("order created successfully");
-            });
-            return res.status(200).end();
-          } catch (error) {
-            console.error("error while creating order", error);
-            return res.status(500).send({ message: "Internal server error" });
-          }
-        }
-      });
-    case "checkout.session.failed":
-      const paymentIntentFailed = event.data.object;
-      const { customer_id: cust_id } = paymentIntentFailed.metadata;
-      console.log("PaymentIntent was failed!", paymentIntentFailed);
-      return res.status(400).end();
-  }
-};
-
-// const createPaymentIntent = async (req, res) => {
-//   try {
-//     const { customer_id } = req.body;
-//     const { total_order_amount } = await calculateOrderAmount(customer_id);
-//     const paymentIntent = await stripe.paymentIntents.create({
-//       amount: total_order_amount * 100,
-//       currency: "inr",
-//       payment_method_types: ["card"],
-//       metadata: {
-//         customer_id,
-//       },
-//       // automatic_payment_methods: { enabled: true },
-//     });
-//     console.log("payment intent secret", paymentIntent.client_secret);
-//     res.send({
-//       clientSecret: paymentIntent.client_secret,
-//     });
-//   } catch (error) {
-//     console.log(error);
-//     return res.status(400).send({
-//       error: {
-//         message: error.message,
-//       },
-//     });
+//     //       //   await transaction.orderItems.createMany({
+//     //       //     data: cartItems.map((cartItem) => ({
+//     //       //       order_id: order.order_id,
+//     //       //       product_id: cartItem.product_id,
+//     //       //       quantity: cartItem.quantity,
+//     //       //       total_amount: cartItem.total_amount,
+//     //       //     })),
+//     //       //   });
+//     //       //   await transaction.cartItems.deleteMany({
+//     //       //     where: {
+//     //       //       cart_item_id: {
+//     //       //         in: cartItems.map((cartItem) => cartItem.cart_item_id),
+//     //       //       },
+//     //       //     },
+//     //       //   });
+//     //       //   await transaction.cart.update({
+//     //       //     where: {
+//     //       //       cart_id: user.carts[0].cart_id,
+//     //       //     },
+//     //       //     data: {
+//     //       //       status: "completed",
+//     //       //     },
+//     //       //   });
+//     //       //   console.log("order created successfully");
+//     //       // });
+//     //     } catch (error) {
+//     //       console.error("error while creating order", error);
+//     //       return res.status(500).send({ message: "Internal server error" });
+//     //     }
+//     //   }
+//     // });
+//     case "checkout.session.failed":
+//       const paymentIntentFailed = event.data.object;
+//       const { customer_id: cust_id } = paymentIntentFailed.metadata;
+//       console.log("PaymentIntent was failed!", paymentIntentFailed);
+//       return res.status(400).end();
 //   }
 // };
 
-// const getConfig = (req, res) => {
-//   return res.send({
-//     publishableKey: process.env.STRIPE_PUBLISHABLE_KEY,
-//   });
-// };
+const webhook = async (req, res) => {
+  const event = req.body;
+  if (event.type === "checkout.session.completed") {
+    const data = event.data.object;
+    console.log("inside checkout session completed");
+    stripe.customers
+      .retrieve(data.customer)
+      .then(async (customer) => {
+        try {
+          await inngest.send({
+            name: "shop/order.created",
+            data: {
+              customer_id: customer.metadata.customer_id,
+              total_amount: data.amount_total,
+            },
+          });
+        } catch (err) {
+          console.log(err);
+        }
+      })
+      .catch((err) => console.log(err.message));
+  }
+  res.status(200).end();
+};
 
 const createCheckoutSession = async (req, res) => {
   const { customer_id } = req.body;
-  const { user } = await calculateOrderAmount(customer_id);
+  const { user } = await getUser(customer_id);
   const customer = await stripe.customers.create({
     metadata: {
       customer_id,
-      // cart: JSON.stringify(user.carts[0].cart_items),
     },
   });
 
@@ -347,7 +256,6 @@ const createCheckoutSession = async (req, res) => {
             currency: "inr",
           },
           display_name: "Free shipping",
-          // Delivers between 5-7 business days
           delivery_estimate: {
             minimum: {
               unit: "business_day",
@@ -400,9 +308,7 @@ module.exports = {
   getOrder,
   getOrders,
   getOrdersCount,
-  placeOrder,
   webhook,
-  // createPaymentIntent,
-  // getConfig,
   createCheckoutSession,
+  getUser,
 };
