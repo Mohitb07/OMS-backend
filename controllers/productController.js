@@ -1,10 +1,11 @@
+const { StatusCodes } = require("http-status-codes");
 const createDOMPurify = require("dompurify");
 const { JSDOM } = require("jsdom");
 
 const prisma = require("../prismaClient");
 const { cloudinary } = require("../services/cloudinary");
 
-const getAllProducts = async (req, res) => {
+const getAllProducts = async (req, res, next) => {
   const { query } = req.body;
   try {
     let products = [];
@@ -23,12 +24,11 @@ const getAllProducts = async (req, res) => {
       products = await prisma.products.findMany();
     }
     if (products.length === 0) {
-      return res.status(200).json([]);
+      return res.status(StatusCodes.OK).json([]);
     }
-    return res.status(200).json(products);
+    return res.status(StatusCodes.OK).json(products);
   } catch (error) {
-    console.error(error);
-    return res.status(500).send({ message: "Internal server error" });
+    next(error);
   }
 };
 
