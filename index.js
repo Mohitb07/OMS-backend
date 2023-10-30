@@ -1,7 +1,17 @@
-require("dotenv").config();
+const dotenv = require("dotenv");
+
+if (process.env.NODE_ENV === "production") {
+  dotenv.config({ path: ".env.production" });
+} else {
+  dotenv.config();
+}
+
 const express = require("express");
 const cors = require("cors");
 const { serve } = require("inngest/express");
+const helmet = require("helmet");
+const morgan = require("morgan");
+const { StatusCodes } = require("http-status-codes");
 
 const authRoutes = require("./routes/auth");
 const userRoutes = require("./routes/userRoutes");
@@ -19,6 +29,8 @@ const env = process.env.NODE_ENV || "development";
 const corsOptions = corsConfig[env];
 
 app.use(cors(corsOptions));
+app.use(helmet());
+app.use(morgan("combined"));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use("/api/inngest", serve(inngest, [handleOrder]));
@@ -26,7 +38,7 @@ app.use("/api/inngest", serve(inngest, [handleOrder]));
 connection.connect(function (err) {
   if (err) {
     console.error("Error connecting to MySQL database: ");
-    return;
+    process.exit(1);
   }
   console.log("Connected to MySQL database.");
 });
@@ -37,6 +49,26 @@ app.use(productRoutes);
 app.use(cartRoutes);
 app.use(orderRoutes);
 
+app.use((err, req, res, next) => {
+  console.error(err.stack); // Log the stack trace
+
+  const statusCode = err.status || StatusCodes.INTERNAL_SERVER_ERROR;
+  const message = err.message || "An unexpected error occurred";
+
+  res.status(statusCode).json({ message });
+});
+
 app.listen(PORT, () => {
-  console.log(`listening to ${PORT}`);
+  console.log(`Server is running on port ${PORT}`);
+});
+
+// Handle unhandled promise rejections
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("Unhandled Rejection at:", promise, "reason:", reason);
+});
+
+// Handle uncaught exceptions
+process.on("uncaughtException", (error) => {
+  console.error("Uncaught Exception:", error);
+  process.exit(1);
 });
