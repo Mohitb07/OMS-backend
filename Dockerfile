@@ -1,54 +1,56 @@
-# syntax = docker/dockerfile:1
+# base node image
+FROM node:16-bullseye-slim as base
 
-# Adjust NODE_VERSION as desired
-ARG NODE_VERSION=16.14.0
-FROM node:${NODE_VERSION}-slim as base
+# set for base and all layer that inherit from it
+ENV NODE_ENV=production
 
-LABEL fly_launch_runtime="Node.js/Prisma"
+# Install openssl for Prisma
+RUN apt-get update && apt-get install -y openssl && apt-get install -y ca-certificates
 
-# Node.js/Prisma app lives here
+# Install all node_modules, including dev dependencies
+FROM base as deps
+
 WORKDIR /app
 
-# Set production environment
-ENV NODE_ENV="production"
+ADD package.json yarn.lock ./
 
+RUN yarn install --production=false
 
-# Throw-away build stage to reduce size of final image
-FROM base as build
+# Setup production node_modules
+FROM base as production-deps
 
-# Install packages needed to build node modules
-RUN apt-get update -qq && \
-    apt-get install -y build-essential openssl pkg-config python
+WORKDIR /app
 
-# Install node modules
-COPY --link package.json yarn.lock ./
-RUN yarn install --frozen-lockfile --production=false
+COPY --from=deps /app/node_modules /app/node_modules
 
-# Generate Prisma Client
-COPY --link prisma .
-RUN npx prisma generate
+ADD package.json yarn.lock ./
 
-# Copy application code
-COPY --link . .
-
-# Build application
-RUN ./entrypoint.sh
-
-# Remove development dependencies
 RUN yarn install --production=true
 
+# Build the app
+FROM base as build
 
-# Final stage for app image
+WORKDIR /app
+
+COPY --from=deps /app/node_modules /app/node_modules
+
+ADD prisma .
+
+RUN npx prisma generate
+
+ADD . .
+
+RUN ./entrypoint.sh
+
+# Finally, build the production image with minimal footprint
 FROM base
 
-# Install packages needed for deployment
-RUN apt-get update -qq && \
-    apt-get install --no-install-recommends -y openssl && \
-    rm -rf /var/lib/apt/lists /var/cache/apt/archives
+WORKDIR /app
 
-# Copy built application
-COPY --from=build /app /app
+COPY --from=production-deps /app/node_modules /app/node_modules
 
-# Start the server by default, this can be overwritten at runtime
-EXPOSE 3000
-CMD [ "yarn", "run", "start" ]
+COPY --from=build /app/node_modules/.prisma /app/node_modules/.prisma
+
+ADD . .
+
+CMD ["yarn", "start"]
