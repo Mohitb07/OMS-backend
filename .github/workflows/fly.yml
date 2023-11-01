@@ -10,6 +10,10 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Create env file
+        run: |
+          touch .env.production
+          echo MYSQL_URL=$ { { secrets.MYSQL_URL }} >> .env.production
       - run: flyctl deploy --remote-only --wait-timeout 1800
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
