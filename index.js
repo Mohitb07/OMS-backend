@@ -37,7 +37,7 @@ app.use("/api/inngest", serve(inngest, [handleOrder]));
 
 connection.connect(function (err) {
   if (err) {
-    console.error("Error connecting to MySQL database: ");
+    console.error("Error connecting to MySQL database: ", err);
     process.exit(1);
   }
   console.log("Connected to MySQL database.");
