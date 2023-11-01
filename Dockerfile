@@ -40,6 +40,8 @@ RUN npx prisma generate
 
 ADD . .
 
+RUN chmod +x ./entrypoint.sh
+
 RUN ./entrypoint.sh
 
 # Finally, build the production image with minimal footprint
