@@ -32,7 +32,7 @@ const getAllProducts = async (req, res, next) => {
   }
 };
 
-const getProduct = async (req, res) => {
+const getProduct = async (req, res, next) => {
   try {
     const { productId } = req.params;
     const product = await prisma.products.findUnique({
@@ -41,17 +41,25 @@ const getProduct = async (req, res) => {
       },
     });
     if (!product) {
-      return res.status(404).send({ message: "Product not found" });
+      return res
+        .status(StatusCodes.NOT_FOUND)
+        .send({ message: "Product not found" });
     }
-    return res.status(200).json(product);
+    return res.status(StatusCodes.OK).json(product);
   } catch (error) {
-    console.error(error);
-    return res.status(500).send({ message: "Internal server error" });
+    next(error);
   }
 };
 
-const createProduct = async (req, res) => {
+const createProduct = async (req, res, next) => {
   const { name, description, price, image_url } = req.body;
+
+  if (!name || !description || !price || !image_url) {
+    return res
+      .status(StatusCodes.BAD_REQUEST)
+      .send({ message: "Missing required fields" });
+  }
+  let publicId;
   const window = new JSDOM("").window;
   const DOMPurify = createDOMPurify(window);
   const clean = DOMPurify.sanitize(description);
@@ -59,6 +67,7 @@ const createProduct = async (req, res) => {
     const resp = await cloudinary.uploader.upload(image_url, {
       upload_preset: "oms",
     });
+    publicId = resp.public_id;
     await prisma.products.create({
       data: {
         name,
@@ -67,12 +76,16 @@ const createProduct = async (req, res) => {
         image_url: resp.public_id,
       },
     });
-    return res.status(201).send({ message: "Product created" });
+    return res.status(StatusCodes.CREATED).send({ message: "Product created" });
   } catch (error) {
-    console.error(error);
-    return res
-      .status(500)
-      .send({ message: "Internal server error try again again" });
+    if (publicId) {
+      try {
+        await cloudinary.uploader.destroy(publicId);
+      } catch (error) {
+        next(error);
+      }
+    }
+    next(error);
   }
 };
 
