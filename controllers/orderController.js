@@ -3,6 +3,7 @@ const Pusher = require("pusher");
 const { getCloudinaryImageURL } = require("../services/cloudinary");
 const { sanitizeHTML } = require("../services/sanitizeHTML");
 const { inngest } = require("../services/inngest");
+const { StatusCodes } = require("http-status-codes");
 
 const pusher = new Pusher({
   appId: "1645752",
@@ -37,15 +38,24 @@ const getUser = async (customer_id) => {
     },
   });
   if (user.carts.length === 0) {
-    return res.status(404).send({ message: "User active cart not found" });
+    return res
+      .status(StatusCodes.NOT_FOUND)
+      .send({ message: "User active cart not found" });
   }
   return {
     user,
   };
 };
 
-const getOrders = async (req, res) => {
+const getOrders = async (req, res, next) => {
   const { customer_id } = req.user;
+
+  if (!customer_id) {
+    return res
+      .status(StatusCodes.BAD_REQUEST)
+      .send({ message: "Missing required fields" });
+  }
+
   try {
     const customer = await prisma.customers.findUnique({
       where: {
@@ -65,17 +75,23 @@ const getOrders = async (req, res) => {
     });
     if (customer.orders.length > 0) {
       const orders = customer.orders;
-      return res.status(200).send(orders);
+      return res.status(StatusCodes.OK).send(orders);
     }
-    return res.status(200).send([]);
+    return res.status(StatusCodes.OK).send([]);
   } catch (error) {
-    console.error(error);
-    return res.status(500).send({ message: "Internal server error try again" });
+    next(error);
   }
 };
 
-const getOrder = async (req, res) => {
+const getOrder = async (req, res, next) => {
   const { orderId } = req.params;
+
+  if (!orderId) {
+    return res
+      .status(StatusCodes.BAD_REQUEST)
+      .json({ message: "Missing order id" });
+  }
+
   try {
     const orderDetail = await prisma.orders.findUnique({
       where: {
@@ -90,27 +106,34 @@ const getOrder = async (req, res) => {
       },
     });
     if (orderDetail) {
-      return res.status(200).send(orderDetail);
+      return res.status(StatusCodes.OK).send(orderDetail);
     }
-    return res.status(404).send({ message: "No order items found" });
+    return res
+      .status(StatusCodes.NOT_FOUND)
+      .json({ message: "No order items found" });
   } catch (error) {
-    console.error(error);
-    return res.status(500).send({ message: "Internal server error try again" });
+    next(error);
   }
 };
 
-const getOrdersCount = async (req, res) => {
+const getOrdersCount = async (req, res, next) => {
   const { customer_id } = req.user;
+
+  if (!customer_id) {
+    return res
+      .status(StatusCodes.BAD_REQUEST)
+      .send({ message: "Missing required fields" });
+  }
+
   try {
     const count = await prisma.orders.count({
       where: {
         customer_id,
       },
     });
-    return res.status(200).send(count.toString());
+    return res.status(StatusCodes.OK).send(count.toString());
   } catch (error) {
-    console.error(error);
-    return res.status(500).send({ message: "Internal server error try again" });
+    next(error);
   }
 };
 
@@ -204,7 +227,7 @@ const webhook = async (req, res) => {
               total_amount: data.amount_total,
             },
           });
-          console.log('called inngest event')
+          console.log("called inngest event");
         } catch (err) {
           console.log(err);
         }
@@ -216,6 +239,13 @@ const webhook = async (req, res) => {
 
 const createCheckoutSession = async (req, res) => {
   const { customer_id } = req.body;
+
+  if (!customer_id) {
+    return res
+      .status(StatusCodes.BAD_REQUEST)
+      .json({ message: "Missing required fields" });
+  }
+
   const { user } = await getUser(customer_id);
   const customer = await stripe.customers.create({
     metadata: {
@@ -300,9 +330,7 @@ const createCheckoutSession = async (req, res) => {
     cancel_url: `${process.env.CLIENT_URL}/cancel`,
   });
 
-  return res.send({
-    url: session.url,
-  });
+  return res.status(StatusCodes.OK).send({ url: session.url });
 };
 
 module.exports = {
