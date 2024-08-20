@@ -8,7 +8,6 @@ module.exports = (req, res, next) => {
   // Extract the access token from the Authorization header
   const authHeader = req.headers.authorization;
   const accessToken = authHeader && authHeader.split(" ")[1];
-
   // Check if the access token is present
   if (!accessToken) {
     return res
@@ -26,17 +25,24 @@ module.exports = (req, res, next) => {
 
     try {
       // Check if the user still exists in the database
-      const user = await prisma.customers.findUnique({
+      const user = await prisma.customer.findUnique({
         where: {
           customer_id: payload.userId,
         },
         select: {
           password: false,
-          address: true,
+          addresses: true,
           username: true,
-          phone: true,
           email: true,
           customer_id: true,
+          cart: {
+            select: {
+              cart_id: true,
+              status: false,
+              customer_id: true,
+              cart_items: true,
+            },
+          }
         },
       });
       // const user = await Customer.findByPk(payload.userId);
