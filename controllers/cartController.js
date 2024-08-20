@@ -1,7 +1,8 @@
+const { StatusCodes } = require("http-status-codes");
 const prisma = require("../prismaClient");
 const { products } = prisma;
 
-const getCart = async (req, res) => {
+const getCart = async (req, res, next) => {
   const { customer_id } = req.user;
   try {
     const customer = await prisma.customers.findUnique({
@@ -25,16 +26,17 @@ const getCart = async (req, res) => {
     });
     if (customer.carts) {
       const cart = customer.carts;
-      return res.status(200).send({ cart });
+      return res.status(StatusCodes.OK).send({ cart });
     }
-    return res.status(404).send({ message: "No active cart found" });
+    return res
+      .status(StatusCodes.NOT_FOUND)
+      .send({ message: "No active cart found" });
   } catch (error) {
-    console.error(error);
-    return res.status(500).send({ message: "Internal server error try again" });
+    next(error);
   }
 };
 
-const getCartItemsCount = async (req, res) => {
+const getCartItemsCount = async (req, res, next) => {
   const { customer_id } = req.user;
   try {
     const count = await prisma.cartItems.count({
@@ -44,14 +46,13 @@ const getCartItemsCount = async (req, res) => {
         },
       },
     });
-    return res.status(200).send(count.toString());
+    return res.status(StatusCodes.OK).send(count.toString());
   } catch (error) {
-    console.log(error);
-    return res.status(500).send({ message: "Internal server error try again" });
+    next(error);
   }
 };
 
-const addToCart = async (req, res) => {
+const addToCart = async (req, res, next) => {
   const { customer_id } = req.user;
   const { product_id, product_price } = req.body;
 
@@ -62,7 +63,9 @@ const addToCart = async (req, res) => {
       },
     });
     if (!user) {
-      return res.status(404).send({ message: "User not found" });
+      return res
+        .status(StatusCodes.NOT_FOUND)
+        .json({ message: "User not found" });
     }
 
     let cart = await prisma.cart.findFirst({
@@ -81,23 +84,6 @@ const addToCart = async (req, res) => {
       });
     }
 
-    // Find the item in the cart or create a new one
-    // let cartItem = await CartItems.findOne({
-    //   where: { cartId: cart.id, itemId: itemId },
-    // });
-    // if (cartItem) {
-    //   // Update the quantity of the existing cart item
-    //   cartItem.quantity += quantity;
-    //   await cartItem.save();
-    // } else {
-    //   // Create a new cart item
-    //   cartItem = await CartItems.create({
-    //     cartId: cart.id,
-    //     itemId: itemId,
-    //     quantity: quantity,
-    //   });
-    // }
-
     const cartItem = await prisma.cartItems.create({
       data: {
         quantity: 1,
@@ -107,16 +93,21 @@ const addToCart = async (req, res) => {
       },
     });
 
-    return res.status(201).send({ cartItem });
+    return res.status(StatusCodes.CREATED).send({ cartItem });
   } catch (error) {
-    console.error(error);
-    return res.status(500).send({ message: "Internal server error" });
+    next(error);
   }
 };
 
-const updateCartQuantity = async (req, res) => {
+const updateCartQuantity = async (req, res, next) => {
   try {
     const { quantity, product_id, cart_id, product_price } = req.body;
+
+    if (!quantity || !product_id || !cart_id || !product_price) {
+      return res
+        .status(StatusCodes.BAD_REQUEST)
+        .json({ message: "Missing required fields" });
+    }
 
     const cartItem = await prisma.cartItems.findFirst({
       where: {
@@ -126,7 +117,9 @@ const updateCartQuantity = async (req, res) => {
     });
 
     if (!cartItem) {
-      return res.status(404).json({ message: "Cart item not found" });
+      return res
+        .status(StatusCodes.NOT_FOUND)
+        .json({ message: "Cart item not found" });
     }
 
     if (Number(quantity) === 0) {
@@ -135,19 +128,21 @@ const updateCartQuantity = async (req, res) => {
           cart_item_id: cartItem.cart_item_id,
         },
       });
-      const remainingItems = await prisma.cartItems.count({
+      const remainingItemsCount = await prisma.cartItems.count({
         where: {
           cart_id,
         },
       });
-      if (remainingItems === 0) {
+      if (remainingItemsCount === 0) {
         await prisma.cart.delete({
           where: {
             cart_id,
           },
         });
       }
-      return res.status(200).json({message: "Cart item removed successfully"});
+      return res
+        .status(StatusCodes.OK)
+        .json({ message: "Cart item removed successfully" });
     }
     const updatedCartItem = await prisma.cartItems.update({
       where: {
@@ -159,23 +154,31 @@ const updateCartQuantity = async (req, res) => {
       },
     });
 
-    return res.status(201).json(updatedCartItem);
+    return res.status(StatusCodes.OK).json(updatedCartItem);
   } catch (error) {
-    console.error(error);
-    return res.status(500).send({ message: "Internal server error" });
+    next(error);
   }
 };
 
-const deleteCartItem = async (req, res) => {
+const deleteCartItem = async (req, res, next) => {
   try {
     const { cart_item_id, cart_id } = req.body;
+
+    if (!cart_item_id || !cart_id) {
+      return res
+        .status(StatusCodes.BAD_REQUEST)
+        .json({ message: "Missing required fields" });
+    }
+
     const cartItem = await prisma.cartItems.findUnique({
       where: {
         cart_item_id,
       },
     });
     if (!cartItem) {
-      return res.status(404).json({ message: "Cart item not found" });
+      return res
+        .status(StatusCodes.NOT_FOUND)
+        .json({ message: "Cart item not found" });
     }
     await prisma.cartItems.delete({
       where: {
@@ -194,10 +197,9 @@ const deleteCartItem = async (req, res) => {
         },
       });
     }
-    return res.status(201).json({ message: "Cart item removed" });
+    return res.status(StatusCodes.OK).json({ message: "Cart item removed" });
   } catch (error) {
-    console.error(error);
-    return res.status(500).send({ message: "Internal server error" });
+    next(error);
   }
 };
 
