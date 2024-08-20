@@ -18,6 +18,7 @@ const userRoutes = require("./routes/userRoutes");
 const productRoutes = require("./routes/productRoutes");
 const cartRoutes = require("./routes/cartRoutes");
 const orderRoutes = require("./routes/orderRoutes");
+const addressRoutes = require("./routes/addressRoutes");
 const corsConfig = require("./config/corsConfig");
 const connection = require("./config/database");
 const { inngest } = require("./services/inngest");
@@ -48,6 +49,8 @@ app.use(userRoutes);
 app.use(productRoutes);
 app.use(cartRoutes);
 app.use(orderRoutes);
+app.use(addressRoutes);
+
 
 app.use((err, req, res, next) => {
   console.error(err.stack); // Log the stack trace

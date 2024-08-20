@@ -11,12 +11,9 @@ router.get("/orders/:orderId", auth, orderController.getOrder);
 
 router.get("/order_count", auth, orderController.getOrdersCount);
 
-router.post(
-  "/webhook",
-  express.json({ type: "application/json" }),
-  orderController.webhook
-);
+router.post("/initiate_payment", auth, orderController.initiatePayment);
 
-router.post("/create-checkout-session", orderController.createCheckoutSession);
+router.post("/payu/success", orderController.handlePaymentResponse);
+router.post("/payu/failure", orderController.handlePaymentResponse);
 
 module.exports = router;
