@@ -12,6 +12,7 @@ router.get("/orders/:orderId", auth, orderController.getOrder);
 router.get("/order_count", auth, orderController.getOrdersCount);
 
 router.post("/initiate_payment", auth, orderController.initiatePayment);
+router.post('/cash_transaction', auth, orderController.cashTransaction)
 
 router.post("/payu/success", orderController.handlePaymentResponse);
 router.post("/payu/failure", orderController.handlePaymentResponse);
