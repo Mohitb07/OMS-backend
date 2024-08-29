@@ -85,6 +85,55 @@ const createUserOrder = async (
   }
 };
 
+const cashTransaction = async (req, res, next) => {
+  const { cart_id, address_id, payment_method } = req.body;
+  const { customer_id } = req.user;
+  if (!payment_method === "cash") {
+    return res.status(400).json({ message: "Invalid payment method" });
+  }
+
+  try {
+    const { order, userCart } = await createUserOrder(
+      payment_method,
+      address_id,
+      customer_id,
+      cart_id
+    );
+    const cartItems = userCart.cart_items;
+    await prisma.$transaction(async (transaction) => {
+      await transaction.order.update({
+        data: {
+          status: "processing",
+        },
+        where: {
+          order_id: order.order_id,
+        },
+      });
+      await transaction.cartItem.deleteMany({
+        where: {
+          cart_item_id: {
+            in: cartItems.map((cartItem) => cartItem.cart_item_id),
+          },
+        },
+      });
+      await transaction.cart.delete({
+        where: {
+          cart_id,
+        },
+      });
+    });
+    console.log("order placed successfully");
+    return res
+      .status(200)
+      .json({ message: "Order placed successfully", sendTo: "complete" });
+  } catch (error) {
+    console.log("error while placing order", error);
+    return res
+      .status(500)
+      .json({ message: "Error while placing order", sendTo: "failed" });
+  }
+};
+
 const initiatePayment = async (req, res, next) => {
   const {
     cart_id,
@@ -97,42 +146,6 @@ const initiatePayment = async (req, res, next) => {
   } = req.body;
   try {
     const { customer_id } = req.user;
-    if (payment_method === "cash") {
-      try {
-        const { order, userCart } = await createUserOrder(
-          payment_method,
-          address_id,
-          customer_id,
-          cart_id
-        );
-        const cartItems = userCart.cart_items;
-        await prisma.$transaction(async (transaction) => {
-          await transaction.order.update({
-            data: {
-              status: "processing",
-            },
-            where: {
-              order_id: order.order_id,
-            },
-          });
-          await transaction.cartItem.deleteMany({
-            where: {
-              cart_item_id: {
-                in: cartItems.map((cartItem) => cartItem.cart_item_id),
-              },
-            },
-          });
-          await transaction.cart.delete({
-            where: {
-              cart_id,
-            },
-          });
-        });
-        console.log("order placed successfully");
-      } catch (error) {
-        console.log("error while placing order", error);
-      }
-    }
     if (payment_method === "card") {
       const { order, userCart } = await createUserOrder(
         payment_method,
@@ -175,16 +188,12 @@ const initiatePayment = async (req, res, next) => {
 };
 
 const handlePaymentResponse = async (req, res) => {
-  console.log("inside handle payment response");
   const { txnid, amount, productinfo, firstname, email, status, hash } =
     req.body;
-  console.log("order id getting", productinfo);
   const params = { txnid, amount, productinfo, firstname, email };
   const generatedHash = verifyPaymentHash(params, status);
   const orderId = productinfo.split(" ")[0];
   const cartId = productinfo.split(" ")[1];
-  console.log("order id after split", orderId);
-  console.log("cart id after split", cartId);
 
   if (generatedHash === hash) {
     if (status === "success") {
@@ -267,7 +276,7 @@ const getOrders = async (req, res, next) => {
   if (!customer_id) {
     return res
       .status(StatusCodes.BAD_REQUEST)
-      .send({ message: "Missing required fields" });
+      .send({ message: "No user session found please login" });
   }
 
   try {
@@ -277,10 +286,18 @@ const getOrders = async (req, res, next) => {
       },
       include: {
         orders: {
+          orderBy: {
+            createdAt: "desc",
+          },
           include: {
             order_items: {
               include: {
                 product: true,
+              },
+            },
+            address: {
+              include: {
+                customer: true,
               },
             },
           },
@@ -357,4 +374,5 @@ module.exports = {
   getOrdersCount,
   initiatePayment,
   handlePaymentResponse,
+  cashTransaction,
 };
