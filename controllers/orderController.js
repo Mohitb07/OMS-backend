@@ -91,7 +91,7 @@ const cashTransaction = async (req, res, next) => {
   if (!payment_method === "cash") {
     return res.status(400).json({ message: "Invalid payment method" });
   }
-
+  let orderId = null;
   try {
     const { order, userCart } = await createUserOrder(
       payment_method,
@@ -99,6 +99,7 @@ const cashTransaction = async (req, res, next) => {
       customer_id,
       cart_id
     );
+    orderId = order.order_id;
     const cartItems = userCart.cart_items;
     await prisma.$transaction(async (transaction) => {
       await transaction.order.update({
@@ -106,7 +107,7 @@ const cashTransaction = async (req, res, next) => {
           status: "processing",
         },
         where: {
-          order_id: order.order_id,
+          order_id: orderId,
         },
       });
       await transaction.cartItem.deleteMany({
@@ -123,14 +124,16 @@ const cashTransaction = async (req, res, next) => {
       });
     });
     console.log("order placed successfully");
-    return res
-      .status(200)
-      .json({ message: "Order placed successfully", sendTo: "complete" });
+    return res.status(StatusCodes.OK).json({
+      message: "Order placed successfully",
+      sendTo: `order/${orderId}`,
+    });
   } catch (error) {
     console.log("error while placing order", error);
-    return res
-      .status(500)
-      .json({ message: "Error while placing order", sendTo: "failed" });
+    return res.status(500).json({
+      message: "Error while placing order",
+      sendTo: `order/${orderId}`,
+    });
   }
 };
 
@@ -224,11 +227,11 @@ const handlePaymentResponse = async (req, res) => {
         })
         .then(() => {
           console.log("order placed successfully");
-          res.redirect(`${process.env.CLIENT_URL}/complete`);
+          res.redirect(`${process.env.CLIENT_URL}/order/${orderId}`);
         })
         .catch((error) => {
           console.error("Error while updating order status", error);
-          res.redirect(`${process.env.CLIENT_URL}/failed`);
+          res.redirect(`${process.env.CLIENT_URL}/order/${orderId}`);
         });
     } else {
       try {
@@ -237,14 +240,51 @@ const handlePaymentResponse = async (req, res) => {
             order_id: orderId,
           },
         });
-        res.redirect(`${process.env.CLIENT_URL}/failed`);
+        res.redirect(`${process.env.CLIENT_URL}/order/${orderId}`);
       } catch (error) {
         console.error("Error while updating order status", error);
-        res.redirect(`${process.env.CLIENT_URL}/failed`);
+        res.redirect(`${process.env.CLIENT_URL}/order/${orderId}`);
       }
     }
   } else {
     res.status(400).json({ error: "Invalid transaction" });
+  }
+};
+
+const validateUserOrder = async (req, res, next) => {
+  const { orderId } = req.params;
+  const { customer_id } = req.user;
+
+  console.log("orderId", orderId);
+  console.log("customer_id", customer_id);
+
+  if (!orderId) {
+    return res
+      .status(StatusCodes.BAD_REQUEST)
+      .json({ message: "Missing order id" });
+  }
+
+  try {
+    const order = await prisma.order.findUnique({
+      where: {
+        order_id: orderId,
+      },
+    });
+
+    if (!order) {
+      return res.status(StatusCodes.OK).json({ status: "cancelled" });
+    }
+
+    if (order.customer_id !== customer_id) {
+      return res
+        .status(StatusCodes.FORBIDDEN)
+        .json({ message: "You are not authorized to view this order" });
+    }
+    return res.status(StatusCodes.OK).send({
+      status: order.status,
+    });
+  } catch (error) {
+    next(error);
   }
 };
 
@@ -375,4 +415,5 @@ module.exports = {
   initiatePayment,
   handlePaymentResponse,
   cashTransaction,
+  validateUserOrder,
 };
