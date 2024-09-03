@@ -22,8 +22,6 @@ const verifyPaymentHash = (params, status) => {
   return crypto.createHash("sha512").update(hashString).digest("hex");
 };
 
-const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
-
 const getUserCart = async (customer_id) => {
   try {
     const userCart = await prisma.cart.findFirst({
@@ -81,7 +79,8 @@ const createUserOrder = async (
       userCart,
     };
   } catch (error) {
-    console.error("Order creataion transaction failed:", error);
+    console.error("Order creation transaction failed:", error);
+    throw error;
   }
 };
 
@@ -89,7 +88,9 @@ const cashTransaction = async (req, res, next) => {
   const { cart_id, address_id, payment_method } = req.body;
   const { customer_id } = req.user;
   if (!payment_method === "cash") {
-    return res.status(400).json({ message: "Invalid payment method" });
+    return res
+      .status(StatusCodes.BAD_REQUEST)
+      .json({ message: "Invalid payment method" });
   }
   let orderId = null;
   try {
@@ -130,7 +131,7 @@ const cashTransaction = async (req, res, next) => {
     });
   } catch (error) {
     console.log("error while placing order", error);
-    return res.status(500).json({
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       message: "Error while placing order",
       sendTo: `order/${orderId}`,
     });
@@ -149,41 +150,46 @@ const initiatePayment = async (req, res, next) => {
   } = req.body;
   try {
     const { customer_id } = req.user;
-    if (payment_method === "card") {
-      const { order, userCart } = await createUserOrder(
-        payment_method,
-        address_id,
-        customer_id,
-        cart_id
-      );
-      const txnid = new Date().getTime(); // Unique transaction ID
-      const cartItems = userCart.cart_items;
-      const amount = calculateCartPrice(cartItems);
-      const params = {
-        key: MERCHANT_KEY,
-        txnid: txnid,
-        amount: `${amount}` + ".00",
-        productinfo: `${order.order_id},${cart_id}`,
-        firstname: shipping_name,
-        email: shipping_email,
-        phone: shipping_phone,
-        surl: process.env.SURL, // Success URL
-        furl: process.env.FURL, // Failure URL
-        hash: "",
-      };
-      params.hash = createPaymentHash(params);
-      console.log("params", params);
 
-      try {
-        const response = await axios.post(`${PAYU_BASE_URL}/_payment`, params, {
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        });
-        res.status(200).json({ redirectUrl: response.request.res.responseUrl });
-      } catch (error) {
-        res
-          .status(500)
-          .json({ error: "Payment initiation failed", details: error.message });
-      }
+    if (!payment_method === "card") {
+      return res
+        .status(StatusCodes.BAD_REQUEST)
+        .json({ message: "Invalid payment method" });
+    }
+
+    const { order, userCart } = await createUserOrder(
+      payment_method,
+      address_id,
+      customer_id,
+      cart_id
+    );
+    const txnid = new Date().getTime(); // Unique transaction ID
+    const cartItems = userCart.cart_items;
+    const amount = calculateCartPrice(cartItems);
+    const params = {
+      key: MERCHANT_KEY,
+      txnid: txnid,
+      amount: `${amount}` + ".00",
+      productinfo: `${order.order_id},${cart_id}`,
+      firstname: shipping_name,
+      email: shipping_email,
+      phone: shipping_phone,
+      surl: process.env.SURL, // Success URL
+      furl: process.env.FURL, // Failure URL
+      hash: "",
+    };
+    params.hash = createPaymentHash(params);
+    try {
+      const response = await axios.post(`${PAYU_BASE_URL}/_payment`, params, {
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      });
+      res
+        .status(StatusCodes.OK)
+        .json({ redirectUrl: response.request.res.responseUrl });
+    } catch (error) {
+      res
+        .status(StatusCodes.INTERNAL_SERVER_ERROR)
+        .json({ error: "Payment initiation failed", details: error.message });
     }
   } catch (error) {
     next(error);
