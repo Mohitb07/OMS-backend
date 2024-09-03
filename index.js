@@ -8,7 +8,6 @@ if (process.env.NODE_ENV === "production") {
 
 const express = require("express");
 const cors = require("cors");
-const { serve } = require("inngest/express");
 const helmet = require("helmet");
 const morgan = require("morgan");
 const { StatusCodes } = require("http-status-codes");
@@ -21,8 +20,6 @@ const orderRoutes = require("./routes/orderRoutes");
 const addressRoutes = require("./routes/addressRoutes");
 const corsConfig = require("./config/corsConfig");
 const connection = require("./config/database");
-const { inngest } = require("./services/inngest");
-const { handleOrder } = require("./services/handleOrder");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -34,7 +31,6 @@ app.use(helmet());
 app.use(morgan("combined"));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
-app.use("/api/inngest", serve(inngest, [handleOrder]));
 
 connection.connect(function (err) {
   if (err) {
@@ -50,7 +46,6 @@ app.use(productRoutes);
 app.use(cartRoutes);
 app.use(orderRoutes);
 app.use(addressRoutes);
-
 
 app.use((err, req, res, next) => {
   console.error(err.stack); // Log the stack trace
