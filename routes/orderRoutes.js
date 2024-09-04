@@ -7,7 +7,7 @@ const router = new express.Router();
 
 router.get("/orders", auth, orderController.getOrders);
 
-router.get("/orders/:orderId", auth, orderController.getOrder);
+router.get("/order/:orderId", auth, orderController.getOrder);
 router.get("/verify_order/:orderId", auth, orderController.validateUserOrder);
 
 router.get("/order_count", auth, orderController.getOrdersCount);
