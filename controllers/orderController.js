@@ -380,6 +380,11 @@ const getOrder = async (req, res, next) => {
             product: true,
           },
         },
+        address: {
+          include: {
+            customer: true,
+          },
+        },
       },
     });
     if (orderDetail) {
