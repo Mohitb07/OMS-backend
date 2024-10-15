@@ -1,17 +1,23 @@
+const { StatusCodes } = require("http-status-codes");
 const CustomError = require("./CustomError");
 
 class ValidationError extends CustomError {
-  errorCode = 400;
+  errorCode = StatusCodes.BAD_REQUEST;
   errorType = "VALIDATION_ERROR";
-  property;
+  errors;
 
-  constructor(message, property) {
+  constructor(message, errors) {
     super(message);
-    this.property = property;
+    this.errors = errors;
     Object.setPrototypeOf(this, ValidationError.prototype);
   }
 
   serializeErrors() {
-    return [{ message: this.message, property: this.property }];
+    return this.errors.map((error) => ({
+      message: error.message,
+      property: error.property,
+    }));
   }
 }
+
+module.exports = ValidationError;

@@ -12,10 +12,6 @@ class CustomError extends Error {
 
     Object.setPrototypeOf(this, CustomError.prototype);
   }
-
-  serializeErrors() {
-    return [{ message: this.message, property }];
-  }
 }
 
 module.exports = CustomError;
