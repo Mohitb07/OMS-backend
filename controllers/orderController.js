@@ -3,6 +3,11 @@ const prisma = require("../prismaClient");
 const crypto = require("crypto");
 const { StatusCodes } = require("http-status-codes");
 const { calculateCartPrice } = require("../services/calculateCartPrice");
+const BadRequestError = require("../errors/BadRequestError");
+const NotFoundError = require("../errors/NotFoundError");
+const ValidationError = require("../errors/ValidationError");
+const ForbiddenError = require("../errors/ForbiddenError");
+const { validationResult } = require("express-validator");
 
 const PAYU_BASE_URL = process.env.PAYU_BASE_URL; // Use 'https://secure.payu.in' for production
 const MERCHANT_KEY = process.env.MERCHANT_KEY;
@@ -87,10 +92,17 @@ const createUserOrder = async (
 const cashTransaction = async (req, res, next) => {
   const { cart_id, address_id, payment_method } = req.body;
   const { customer_id } = req.user;
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const result = errors.formatWith(({ msg, param }) => {
+      return { message: msg, property: param };
+    });
+    throw new ValidationError("Incorrect data", result.array());
+  }
+
   if (!payment_method === "cash") {
-    return res
-      .status(StatusCodes.BAD_REQUEST)
-      .json({ message: "Invalid payment method" });
+    throw new BadRequestError("Invalid payment method");
   }
   let orderId = null;
   try {
@@ -145,16 +157,21 @@ const initiatePayment = async (req, res, next) => {
     shipping_name,
     shipping_phone,
     shipping_email,
-    productinfo,
     payment_method,
   } = req.body;
   try {
     const { customer_id } = req.user;
 
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      const result = errors.formatWith(({ msg, param }) => {
+        return { message: msg, property: param };
+      });
+      throw new ValidationError("Incorrect data", result.array());
+    }
+
     if (!payment_method === "card") {
-      return res
-        .status(StatusCodes.BAD_REQUEST)
-        .json({ message: "Invalid payment method" });
+      throw new BadRequestError("Invalid payment method");
     }
 
     const { order, userCart } = await createUserOrder(
@@ -187,9 +204,7 @@ const initiatePayment = async (req, res, next) => {
         .status(StatusCodes.OK)
         .json({ redirectUrl: response.request.res.responseUrl });
     } catch (error) {
-      res
-        .status(StatusCodes.INTERNAL_SERVER_ERROR)
-        .json({ error: "Payment initiation failed", details: error.message });
+      throw new Error("Error while processing payment", error);
     }
   } catch (error) {
     next(error);
@@ -213,9 +228,8 @@ const handlePaymentResponse = async (req, res) => {
               order_id: orderId,
             },
           });
-          console.log("current order detail", order);
           if (!order) {
-            throw new Error("Order not found");
+            throw new NotFoundError(`Order with id ${orderId} not found`);
           }
           await transaction.order.update({
             data: {
@@ -253,7 +267,7 @@ const handlePaymentResponse = async (req, res) => {
       }
     }
   } else {
-    res.status(400).json({ error: "Invalid transaction" });
+    throw new ValidationError("Invalid payment hash");
   }
 };
 
@@ -261,13 +275,12 @@ const validateUserOrder = async (req, res, next) => {
   const { orderId } = req.params;
   const { customer_id } = req.user;
 
-  console.log("orderId", orderId);
-  console.log("customer_id", customer_id);
-
-  if (!orderId) {
-    return res
-      .status(StatusCodes.BAD_REQUEST)
-      .json({ message: "Missing order id" });
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const result = errors.formatWith(({ msg, param }) => {
+      return { message: msg, property: param };
+    });
+    throw new ValidationError("Incorrect data", result.array());
   }
 
   try {
@@ -282,9 +295,7 @@ const validateUserOrder = async (req, res, next) => {
     }
 
     if (order.customer_id !== customer_id) {
-      return res
-        .status(StatusCodes.FORBIDDEN)
-        .json({ message: "You are not authorized to view this order" });
+      throw new ForbiddenError("You are not authorized to view this order");
     }
     return res.status(StatusCodes.OK).send({
       status: order.status,
@@ -318,14 +329,11 @@ const processRefund = async (txnId, amount) => {
 
 const getOrders = async (req, res, next) => {
   const { customer_id } = req.user;
-
-  if (!customer_id) {
-    return res
-      .status(StatusCodes.BAD_REQUEST)
-      .send({ message: "No user session found please login" });
-  }
-
+  const { userId } = req.params;
   try {
+    if (userId !== customer_id) {
+      throw new ForbiddenError("You are not authorized to continue");
+    }
     const customer = await prisma.customer.findUnique({
       where: {
         customer_id,
@@ -350,11 +358,12 @@ const getOrders = async (req, res, next) => {
         },
       },
     });
-    if (customer.orders.length > 0) {
-      const orders = customer.orders;
-      return res.status(StatusCodes.OK).send(orders);
+
+    if (!customer) {
+      throw new NotFoundError(`Customer with id ${customer_id} not found`);
     }
-    return res.status(StatusCodes.OK).send([]);
+
+    return res.status(StatusCodes.OK).send(customer.orders || []);
   } catch (error) {
     next(error);
   }
@@ -363,10 +372,12 @@ const getOrders = async (req, res, next) => {
 const getOrder = async (req, res, next) => {
   const { orderId } = req.params;
 
-  if (!orderId) {
-    return res
-      .status(StatusCodes.BAD_REQUEST)
-      .json({ message: "Missing order id" });
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const result = errors.formatWith(({ msg, param }) => {
+      return { message: msg, property: param };
+    });
+    throw new ValidationError("Incorrect data", result.array());
   }
 
   try {
@@ -387,12 +398,10 @@ const getOrder = async (req, res, next) => {
         },
       },
     });
-    if (orderDetail) {
-      return res.status(StatusCodes.OK).send(orderDetail);
+    if (!orderDetail) {
+      throw new NotFoundError(`Order with id ${orderId} not found`);
     }
-    return res
-      .status(StatusCodes.NOT_FOUND)
-      .json({ message: "No order items found" });
+    return res.status(StatusCodes.OK).send(orderDetail);
   } catch (error) {
     next(error);
   }
@@ -400,12 +409,6 @@ const getOrder = async (req, res, next) => {
 
 const getOrdersCount = async (req, res, next) => {
   const { customer_id } = req.user;
-
-  if (!customer_id) {
-    return res
-      .status(StatusCodes.BAD_REQUEST)
-      .send({ message: "Missing required fields" });
-  }
 
   try {
     const count = await prisma.order.count({
