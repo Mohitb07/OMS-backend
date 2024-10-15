@@ -1,5 +1,8 @@
 const { StatusCodes } = require("http-status-codes");
 const prisma = require("../prismaClient");
+const NotFoundError = require("../errors/NotFoundError");
+const { validationResult } = require("express-validator");
+const ValidationError = require("../errors/ValidationError");
 
 const getAddresses = async (req, res, next) => {
   try {
@@ -8,7 +11,6 @@ const getAddresses = async (req, res, next) => {
         customer_id: req.user.customer_id,
       },
     });
-    console.log("address", addresses);
     return res.status(StatusCodes.OK).json(addresses);
   } catch (error) {
     next(error);
@@ -17,6 +19,15 @@ const getAddresses = async (req, res, next) => {
 
 const getAddressById = async (req, res, next) => {
   const { addressId } = req.params;
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const result = errors.formatWith(({ msg, param }) => {
+      return { message: msg, property: param };
+    });
+    throw new ValidationError("Incorrect data", result.array());
+  }
+
   try {
     const address = await prisma.customerAddress.findUnique({
       where: {
@@ -25,9 +36,7 @@ const getAddressById = async (req, res, next) => {
     });
 
     if (!address) {
-      return res
-        .status(StatusCodes.NOT_FOUND)
-        .json({ message: "Address not found" });
+      throw new NotFoundError(`Address with id ${addressId} not found`);
     }
 
     return res.status(StatusCodes.OK).json(address);
@@ -49,6 +58,15 @@ const createAddress = async (req, res, next) => {
     area,
     isDefault,
   } = req.body;
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const result = errors.formatWith(({ msg, param }) => {
+      return { message: msg, property: param };
+    });
+    throw new ValidationError("Incorrect data", result.array());
+  }
+
   try {
     const address = await prisma.customerAddress.create({
       data: {
@@ -81,6 +99,14 @@ const updateAddress = async (req, res, next) => {
     req.body;
 
   const { addressId } = req.params;
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const result = errors.formatWith(({ msg, param }) => {
+      return { message: msg, property: param };
+    });
+    throw new ValidationError("Incorrect data", result.array());
+  }
 
   try {
     const address = await prisma.customerAddress.findUnique({

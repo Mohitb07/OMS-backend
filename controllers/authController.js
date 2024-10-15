@@ -6,14 +6,21 @@ const jwt = require("jsonwebtoken");
 const { validationResult } = require("express-validator");
 const { StatusCodes } = require("http-status-codes");
 const prisma = require("../prismaClient");
+const ValidationError = require("../errors/ValidationError");
+const UnauthorizedError = require("../errors/UnauthorizedError");
 
 const login = async (req, res, next) => {
   const { email, password } = req.body;
-  if (!email || !password) {
-    return res
-      .status(StatusCodes.BAD_REQUEST)
-      .json({ message: "Please provide valid username or password" });
+  const errors = validationResult(req);
+  
+  if (!errors.isEmpty()) {
+    const result = errors.formatWith(({ msg, param }) => {
+      return { message: msg, property: param };
+    });
+
+    throw new ValidationError("Missing required fields", result.array());
   }
+
   try {
     const user = await prisma.customer.findUnique({
       where: {
@@ -27,15 +34,11 @@ const login = async (req, res, next) => {
       },
     });
     if (!user) {
-      return res
-        .status(StatusCodes.UNAUTHORIZED)
-        .json({ message: "Invalid username or password" });
+      throw new UnauthorizedError("Invalid username or password");
     }
     const match = await bcrypt.compare(password, user.password);
     if (!match) {
-      return res
-        .status(StatusCodes.UNAUTHORIZED)
-        .json({ message: "Invalid username or password" });
+      throw new UnauthorizedError("Invalid username or password");
     }
     const accessToken = jwt.sign(
       { userId: user.customer_id },
@@ -54,7 +57,11 @@ const login = async (req, res, next) => {
 const register = async (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    return res.status(StatusCodes.BAD_REQUEST).json({ errors: errors.array() });
+    const result = errors.formatWith(({ msg, param }) => {
+      return { message: msg, property: param };
+    });
+
+    throw new ValidationError("Missing required fields", result.array());
   }
   const salt = bcrypt.genSaltSync(10);
   const hashedPassword = bcrypt.hashSync(req.body.password, salt);
@@ -78,11 +85,9 @@ const register = async (req, res, next) => {
     console.log("new error", error.meta.target);
     if (error instanceof PrismaClientKnownRequestError) {
       if (error.meta.target === "email") {
-        return res.status(StatusCodes.CONFLICT).json({
-          message: {
-            email: "Email already exists",
-          },
-        });
+        throw new ValidationError("Email already exists", [
+          { message: "Email already exists", property: "email" },
+        ]);
       }
     }
     next(error);

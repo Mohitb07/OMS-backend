@@ -8,8 +8,13 @@ const authController = require("../controllers/authController");
 router.post(
   "/login",
   [
-    body("email").isEmail().withMessage("Invalid email address"),
-    body("password").notEmpty().withMessage("password is required"),
+    body("email")
+      .notEmpty()
+      .withMessage("Email is required")
+      .if(body("email").trim().notEmpty())
+      .isEmail()
+      .withMessage("Invalid email address"),
+    body("password").notEmpty().withMessage("Password is required"),
   ],
   authController.login
 );
@@ -18,9 +23,17 @@ router.post(
 router.post(
   "/register",
   [
-    body("email").isEmail().withMessage("Invalid email address"),
-    body("username").notEmpty().withMessage("username is required"),
+    body("username").notEmpty().withMessage("Username is required"),
+    body("email")
+      .notEmpty()
+      .withMessage("Email is required")
+      .if(body("email").trim().notEmpty())
+      .isEmail()
+      .withMessage("Invalid email address"),
     body("password")
+      .notEmpty()
+      .withMessage("Password is required")
+      .if(body("password").trim().notEmpty())
       .isLength({ min: 8, max: Infinity })
       .withMessage("Password must be between 8 and 20 characters"),
   ],

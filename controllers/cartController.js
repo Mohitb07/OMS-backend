@@ -1,5 +1,8 @@
 const { StatusCodes } = require("http-status-codes");
 const prisma = require("../prismaClient");
+const NotFoundError = require("../errors/NotFoundError");
+const ValidationError = require("../errors/ValidationError");
+const { validationResult } = require("express-validator");
 const { products } = prisma;
 
 const getCart = async (req, res, next) => {
@@ -18,8 +21,6 @@ const getCart = async (req, res, next) => {
         },
       },
     });
-
-    console.log("cart value", userCart);
     const cart = userCart;
     return res.status(StatusCodes.OK).send(cart || {});
   } catch (error) {
@@ -29,6 +30,7 @@ const getCart = async (req, res, next) => {
 
 const getCartItemsCount = async (req, res, next) => {
   const { customer_id } = req.user;
+
   try {
     // FIND BETTER WAY
     const count = await prisma.cartItem.count({
@@ -48,6 +50,15 @@ const addToCart = async (req, res, next) => {
   const { customer_id } = req.user;
   const { product_id } = req.body;
 
+  const errors = validationResult(req);
+
+  if (!errors.isEmpty()) {
+    const result = errors.formatWith(({ msg, param }) => {
+      return { message: msg, property: param };
+    });
+    throw new ValidationError("Missing required fields", result.array());
+  }
+
   try {
     const user = await prisma.customer.findUnique({
       where: {
@@ -55,9 +66,7 @@ const addToCart = async (req, res, next) => {
       },
     });
     if (!user) {
-      return res
-        .status(StatusCodes.NOT_FOUND)
-        .json({ message: "User not found" });
+      throw new NotFoundError("User does not exist");
     }
     const product = await prisma.product.findUnique({
       where: {
@@ -65,9 +74,7 @@ const addToCart = async (req, res, next) => {
       },
     });
     if (!product) {
-      return res
-        .status(StatusCodes.NOT_FOUND)
-        .json({ message: "Product not found" });
+      throw new NotFoundError(`Product with id ${product_id} not found`);
     }
 
     let cart = await prisma.cart.findFirst({
@@ -76,8 +83,6 @@ const addToCart = async (req, res, next) => {
         status: "active",
       },
     });
-
-    console.log('above cart', cart)
 
     if (!cart) {
       cart = await prisma.cart.create({
@@ -120,26 +125,32 @@ const addToCart = async (req, res, next) => {
 };
 
 const updateCartQuantity = async (req, res, next) => {
+  const { quantity, product_id, cart_id } = req.body;
+
+  const errors = validationResult(req);
+
+  if (!errors.isEmpty()) {
+    const result = errors.formatWith(({ msg, param }) => {
+      return { message: msg, property: param };
+    });
+    throw new ValidationError("Missing required fields", result.array());
+  }
+
   try {
-    const { quantity, product_id, cart_id, product_price } = req.body;
-
-    if (!quantity || !product_id || !cart_id || !product_price) {
-      return res
-        .status(StatusCodes.BAD_REQUEST)
-        .json({ message: "Missing required fields" });
-    }
-
     const cartItem = await prisma.cartItem.findFirst({
       where: {
         cart_id,
         product_id,
       },
+      include: {
+        product: true,
+      },
     });
 
+    cartItem.product.price;
+
     if (!cartItem) {
-      return res
-        .status(StatusCodes.NOT_FOUND)
-        .json({ message: "Cart item not found" });
+      throw new NotFoundError("Cart item not found");
     }
 
     if (Number(quantity) === 0) {
@@ -170,7 +181,7 @@ const updateCartQuantity = async (req, res, next) => {
       },
       data: {
         quantity: Number(quantity),
-        total_amount: Number(product_price) * Number(quantity),
+        total_amount: Number(cartItem.product.price) * Number(quantity),
       },
     });
 
@@ -183,11 +194,13 @@ const updateCartQuantity = async (req, res, next) => {
 const deleteCartItem = async (req, res, next) => {
   try {
     const { cart_item_id, cart_id } = req.body;
+    const errors = validationResult(req);
 
-    if (!cart_item_id || !cart_id) {
-      return res
-        .status(StatusCodes.BAD_REQUEST)
-        .json({ message: "Missing required fields" });
+    if (!errors.isEmpty()) {
+      const result = errors.formatWith(({ msg, param }) => {
+        return { message: msg, property: param };
+      });
+      throw new ValidationError("Missing required fields", result.array());
     }
 
     const cartItem = await prisma.cartItem.findUnique({
@@ -196,9 +209,7 @@ const deleteCartItem = async (req, res, next) => {
       },
     });
     if (!cartItem) {
-      return res
-        .status(StatusCodes.NOT_FOUND)
-        .json({ message: "Cart item not found" });
+      throw new NotFoundError("Cart item not found");
     }
     await prisma.cartItem.delete({
       where: {
