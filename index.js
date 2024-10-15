@@ -7,6 +7,7 @@ if (process.env.NODE_ENV === "production") {
 }
 
 const express = require("express");
+require('express-async-errors')
 const cors = require("cors");
 const helmet = require("helmet");
 const morgan = require("morgan");
@@ -20,7 +21,7 @@ const orderRoutes = require("./routes/orderRoutes");
 const addressRoutes = require("./routes/addressRoutes");
 const corsConfig = require("./config/corsConfig");
 const connection = require("./config/database");
-const globarErrorHandler = require("./middleware/globarErrorHandler");
+const errorHandler = require("./middleware/globalErrorHandler");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -47,7 +48,7 @@ app.use(productRoutes);
 app.use(cartRoutes);
 app.use(orderRoutes);
 app.use(addressRoutes);
-app.use("*", globarErrorHandler);
+app.use(errorHandler);
 
 // app.use((err, req, res, next) => {
 //   console.error(err.stack); // Log the stack trace
