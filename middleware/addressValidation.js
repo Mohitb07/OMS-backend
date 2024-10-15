@@ -1,4 +1,4 @@
-const { oneOf, body, validationResult } = require("express-validator");
+const { oneOf, body } = require("express-validator");
 
 const validateAddress = [
   // Check if the country is India
@@ -37,14 +37,17 @@ const validateAddress = [
   // Check if isDefault is a boolean
   body("isDefault").isBoolean(),
   // Handle any validation errors
-  (req, res, next) => {
-    const errors = validationResult(req);
-    console.log('errors getting', errors.array())
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
-    }
-    next();
-  },
+  // (req, res, next) => {
+  //   const errors = validationResult(req);
+  //   console.log('errors getting', errors.array())
+  //   if (!errors.isEmpty()) {
+  //     const result = errors.formatWith(({ msg, param }) => {
+  //       return { message: msg, property: param };
+  //     });
+  //     throw new ValidationError("Missing required fields", result.array());
+  //   }
+  //   next();
+  // },
 ];
 
 module.exports = { validateAddress };
