@@ -38,6 +38,8 @@ ADD prisma .
 
 RUN npx prisma generate
 
+RUN npx prisma migrate deploy
+
 ADD . .
 
 RUN chmod +x ./entrypoint.sh
