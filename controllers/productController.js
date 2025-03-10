@@ -22,19 +22,25 @@ const getAllProducts = async (req, res, next) => {
     throw new ValidationError("Incorrect data", result.array());
   }
 
-  const LIMIT = 10;
+  const LIMIT = 12;
   const currentPage = Number(page) || 1;
   try {
     let products = [];
     if (query) {
       products = await prisma.product.findMany({
         where: {
-          name: {
-            search: query,
-          },
-          description: {
-            search: query,
-          },
+          OR: [
+            {
+              name: {
+                contains: query,
+              },
+            },
+            {
+              description: {
+                contains: query,
+              },
+            },
+          ],
         },
         take: LIMIT,
         skip: (currentPage - 1) * LIMIT,
@@ -66,16 +72,21 @@ const getProductsCount = async (req, res, next) => {
   }
 
   try {
-
     if (query) {
       const count = await prisma.product.count({
         where: {
-          name: {
-            search: query,
-          },
-          description: {
-            search: query,
-          },
+          OR: [
+            {
+              name: {
+                contains: query,
+              },
+            },
+            {
+              description: {
+                contains: query,
+              },
+            },
+          ],
         },
       });
       return res.status(StatusCodes.OK).json({ count });
@@ -90,7 +101,6 @@ const getProductsCount = async (req, res, next) => {
 
 const getProduct = async (req, res, next) => {
   const { productId } = req.params;
-  console.log('productId', productId);
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     const result = errors.formatWith(({ msg, param }) => {
@@ -106,7 +116,6 @@ const getProduct = async (req, res, next) => {
         product_id: productId,
       },
     });
-    console.log('product got', product);
     if (!product) {
       throw new NotFoundError(`Product with id ${productId} not found`);
     }
