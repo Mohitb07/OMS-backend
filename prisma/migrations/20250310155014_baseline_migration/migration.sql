@@ -94,7 +94,7 @@ CREATE TABLE `Order` (
 CREATE TABLE `Product` (
     `product_id` VARCHAR(191) NOT NULL,
     `name` VARCHAR(255) NOT NULL,
-    `description` VARCHAR(1000) NOT NULL,
+    `description` VARCHAR(10000) NOT NULL,
     `price` DECIMAL(10, 2) NOT NULL,
     `image_url` VARCHAR(255) NOT NULL,
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
