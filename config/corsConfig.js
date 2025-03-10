@@ -1,8 +1,9 @@
 // corsConfig.js
 const devCorsOptions = {
-  origin: "*", // Replace with your development frontend URL
+  origin: process.env.CLIENT_URL, // Replace with your development frontend URL
   methods: "GET,PUT,POST,DELETE,PATCH, OPTIONS",
   allowedHeaders: "Content-Type,Authorization",
+  credentials: true,
 };
 
 const prodCorsOptions = {

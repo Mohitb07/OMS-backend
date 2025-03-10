@@ -4,6 +4,7 @@ const router = new express.Router();
 const addressController = require("../controllers/addressController");
 const { validateAddress } = require("../middleware/addressValidation");
 const auth = require("../middleware/auth");
+const { param } = require("express-validator");
 
 // create address
 router.post(
@@ -20,10 +21,18 @@ router.get("/addresses", auth, addressController.getAddresses);
 router.patch(
   "/update_address/:addressId",
   auth,
-  validateAddress,
+  [
+    ...validateAddress,
+    [param("addressId").isString().withMessage("Address ID must be a string")],
+  ],
   addressController.updateAddress
 );
 
-router.get("/address/:addressId", auth, addressController.getAddressById);
+router.get(
+  "/address/:addressId",
+  [param("addressId").isString().withMessage("Address ID must be a string")],
+  auth,
+  addressController.getAddressById
+);
 
 module.exports = router;

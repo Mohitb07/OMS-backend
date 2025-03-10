@@ -3,6 +3,11 @@ const prisma = require("../prismaClient");
 const crypto = require("crypto");
 const { StatusCodes } = require("http-status-codes");
 const { calculateCartPrice } = require("../services/calculateCartPrice");
+const BadRequestError = require("../errors/BadRequestError");
+const NotFoundError = require("../errors/NotFoundError");
+const ValidationError = require("../errors/ValidationError");
+const ForbiddenError = require("../errors/ForbiddenError");
+const { validationResult } = require("express-validator");
 
 const PAYU_BASE_URL = process.env.PAYU_BASE_URL; // Use 'https://secure.payu.in' for production
 const MERCHANT_KEY = process.env.MERCHANT_KEY;
@@ -21,8 +26,6 @@ const verifyPaymentHash = (params, status) => {
   const hashString = `${MERCHANT_SALT}|${status}|||||||||||${params.email}|${params.firstname}|${params.productinfo}|${params.amount}|${params.txnid}|${MERCHANT_KEY}`;
   return crypto.createHash("sha512").update(hashString).digest("hex");
 };
-
-const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
 const getUserCart = async (customer_id) => {
   try {
@@ -81,7 +84,69 @@ const createUserOrder = async (
       userCart,
     };
   } catch (error) {
-    console.error("Order creataion transaction failed:", error);
+    console.error("Order creation transaction failed:", error);
+    throw error;
+  }
+};
+
+const cashTransaction = async (req, res, next) => {
+  const { cart_id, address_id, payment_method } = req.body;
+  const { customer_id } = req.user;
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const result = errors.formatWith(({ msg, param }) => {
+      return { message: msg, property: param };
+    });
+    throw new ValidationError("Incorrect data", result.array());
+  }
+
+  if (!payment_method === "cash") {
+    throw new BadRequestError("Invalid payment method");
+  }
+  let orderId = null;
+  try {
+    const { order, userCart } = await createUserOrder(
+      payment_method,
+      address_id,
+      customer_id,
+      cart_id
+    );
+    orderId = order.order_id;
+    const cartItems = userCart.cart_items;
+    await prisma.$transaction(async (transaction) => {
+      await transaction.order.update({
+        data: {
+          status: "processing",
+        },
+        where: {
+          order_id: orderId,
+        },
+      });
+      await transaction.cartItem.deleteMany({
+        where: {
+          cart_item_id: {
+            in: cartItems.map((cartItem) => cartItem.cart_item_id),
+          },
+        },
+      });
+      await transaction.cart.delete({
+        where: {
+          cart_id,
+        },
+      });
+    });
+    console.log("order placed successfully");
+    return res.status(StatusCodes.OK).json({
+      message: "Order placed successfully",
+      sendTo: `order/${orderId}`,
+    });
+  } catch (error) {
+    console.log("error while placing order", error);
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      message: "Error while placing order",
+      sendTo: `order/${orderId}`,
+    });
   }
 };
 
@@ -92,82 +157,54 @@ const initiatePayment = async (req, res, next) => {
     shipping_name,
     shipping_phone,
     shipping_email,
-    productinfo,
     payment_method,
   } = req.body;
   try {
     const { customer_id } = req.user;
-    if (payment_method === "cash") {
-      try {
-        const { order, userCart } = await createUserOrder(
-          payment_method,
-          address_id,
-          customer_id,
-          cart_id
-        );
-        const cartItems = userCart.cart_items;
-        await prisma.$transaction(async (transaction) => {
-          await transaction.order.update({
-            data: {
-              status: "processing",
-            },
-            where: {
-              order_id: order.order_id,
-            },
-          });
-          await transaction.cartItem.deleteMany({
-            where: {
-              cart_item_id: {
-                in: cartItems.map((cartItem) => cartItem.cart_item_id),
-              },
-            },
-          });
-          await transaction.cart.delete({
-            where: {
-              cart_id,
-            },
-          });
-        });
-        console.log("order placed successfully");
-      } catch (error) {
-        console.log("error while placing order", error);
-      }
-    }
-    if (payment_method === "card") {
-      const { order, userCart } = await createUserOrder(
-        payment_method,
-        address_id,
-        customer_id,
-        cart_id
-      );
-      const txnid = new Date().getTime(); // Unique transaction ID
-      const cartItems = userCart.cart_items;
-      const amount = calculateCartPrice(cartItems);
-      const params = {
-        key: MERCHANT_KEY,
-        txnid: txnid,
-        amount: `${amount}` + ".00",
-        productinfo: `${order.order_id},${cart_id}`,
-        firstname: shipping_name,
-        email: shipping_email,
-        phone: shipping_phone,
-        surl: process.env.SURL, // Success URL
-        furl: process.env.FURL, // Failure URL
-        hash: "",
-      };
-      params.hash = createPaymentHash(params);
-      console.log("params", params);
 
-      try {
-        const response = await axios.post(`${PAYU_BASE_URL}/_payment`, params, {
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        });
-        res.status(200).json({ redirectUrl: response.request.res.responseUrl });
-      } catch (error) {
-        res
-          .status(500)
-          .json({ error: "Payment initiation failed", details: error.message });
-      }
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      const result = errors.formatWith(({ msg, param }) => {
+        return { message: msg, property: param };
+      });
+      throw new ValidationError("Incorrect data", result.array());
+    }
+
+    if (!payment_method === "card") {
+      throw new BadRequestError("Invalid payment method");
+    }
+
+    const { order, userCart } = await createUserOrder(
+      payment_method,
+      address_id,
+      customer_id,
+      cart_id
+    );
+    const txnid = new Date().getTime(); // Unique transaction ID
+    const cartItems = userCart.cart_items;
+    const amount = calculateCartPrice(cartItems);
+    const params = {
+      key: MERCHANT_KEY,
+      txnid: txnid,
+      amount: `${amount}` + ".00",
+      productinfo: `${order.order_id},${cart_id}`,
+      firstname: shipping_name,
+      email: shipping_email,
+      phone: shipping_phone,
+      surl: process.env.SURL, // Success URL
+      furl: process.env.FURL, // Failure URL
+      hash: "",
+    };
+    params.hash = createPaymentHash(params);
+    try {
+      const response = await axios.post(`${PAYU_BASE_URL}/_payment`, params, {
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      });
+      res
+        .status(StatusCodes.OK)
+        .json({ redirectUrl: response.request.res.responseUrl });
+    } catch (error) {
+      throw new Error("Error while processing payment", error);
     }
   } catch (error) {
     next(error);
@@ -175,16 +212,12 @@ const initiatePayment = async (req, res, next) => {
 };
 
 const handlePaymentResponse = async (req, res) => {
-  console.log("inside handle payment response");
   const { txnid, amount, productinfo, firstname, email, status, hash } =
     req.body;
-  console.log("order id getting", productinfo);
   const params = { txnid, amount, productinfo, firstname, email };
   const generatedHash = verifyPaymentHash(params, status);
   const orderId = productinfo.split(" ")[0];
   const cartId = productinfo.split(" ")[1];
-  console.log("order id after split", orderId);
-  console.log("cart id after split", cartId);
 
   if (generatedHash === hash) {
     if (status === "success") {
@@ -195,9 +228,8 @@ const handlePaymentResponse = async (req, res) => {
               order_id: orderId,
             },
           });
-          console.log("current order detail", order);
           if (!order) {
-            throw new Error("Order not found");
+            throw new NotFoundError(`Order with id ${orderId} not found`);
           }
           await transaction.order.update({
             data: {
@@ -215,11 +247,11 @@ const handlePaymentResponse = async (req, res) => {
         })
         .then(() => {
           console.log("order placed successfully");
-          res.redirect(`${process.env.CLIENT_URL}/complete`);
+          res.redirect(`${process.env.CLIENT_URL}/order/${orderId}`);
         })
         .catch((error) => {
           console.error("Error while updating order status", error);
-          res.redirect(`${process.env.CLIENT_URL}/failed`);
+          res.redirect(`${process.env.CLIENT_URL}/order/${orderId}`);
         });
     } else {
       try {
@@ -228,14 +260,48 @@ const handlePaymentResponse = async (req, res) => {
             order_id: orderId,
           },
         });
-        res.redirect(`${process.env.CLIENT_URL}/failed`);
+        res.redirect(`${process.env.CLIENT_URL}/order/${orderId}`);
       } catch (error) {
         console.error("Error while updating order status", error);
-        res.redirect(`${process.env.CLIENT_URL}/failed`);
+        res.redirect(`${process.env.CLIENT_URL}/order/${orderId}`);
       }
     }
   } else {
-    res.status(400).json({ error: "Invalid transaction" });
+    throw new ValidationError("Invalid payment hash");
+  }
+};
+
+const validateUserOrder = async (req, res, next) => {
+  const { orderId } = req.params;
+  const { customer_id } = req.user;
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const result = errors.formatWith(({ msg, param }) => {
+      return { message: msg, property: param };
+    });
+    throw new ValidationError("Incorrect data", result.array());
+  }
+
+  try {
+    const order = await prisma.order.findUnique({
+      where: {
+        order_id: orderId,
+      },
+    });
+
+    if (!order) {
+      return res.status(StatusCodes.OK).json({ status: "cancelled" });
+    }
+
+    if (order.customer_id !== customer_id) {
+      throw new ForbiddenError("You are not authorized to view this order");
+    }
+    return res.status(StatusCodes.OK).send({
+      status: order.status,
+    });
+  } catch (error) {
+    next(error);
   }
 };
 
@@ -263,35 +329,41 @@ const processRefund = async (txnId, amount) => {
 
 const getOrders = async (req, res, next) => {
   const { customer_id } = req.user;
-
-  if (!customer_id) {
-    return res
-      .status(StatusCodes.BAD_REQUEST)
-      .send({ message: "Missing required fields" });
-  }
-
+  const { userId } = req.params;
   try {
+    if (userId !== customer_id) {
+      throw new ForbiddenError("You are not authorized to continue");
+    }
     const customer = await prisma.customer.findUnique({
       where: {
         customer_id,
       },
       include: {
         orders: {
+          orderBy: {
+            createdAt: "desc",
+          },
           include: {
             order_items: {
               include: {
                 product: true,
               },
             },
+            address: {
+              include: {
+                customer: true,
+              },
+            },
           },
         },
       },
     });
-    if (customer.orders.length > 0) {
-      const orders = customer.orders;
-      return res.status(StatusCodes.OK).send(orders);
+
+    if (!customer) {
+      throw new NotFoundError(`Customer with id ${customer_id} not found`);
     }
-    return res.status(StatusCodes.OK).send([]);
+
+    return res.status(StatusCodes.OK).send(customer.orders || []);
   } catch (error) {
     next(error);
   }
@@ -300,10 +372,12 @@ const getOrders = async (req, res, next) => {
 const getOrder = async (req, res, next) => {
   const { orderId } = req.params;
 
-  if (!orderId) {
-    return res
-      .status(StatusCodes.BAD_REQUEST)
-      .json({ message: "Missing order id" });
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const result = errors.formatWith(({ msg, param }) => {
+      return { message: msg, property: param };
+    });
+    throw new ValidationError("Incorrect data", result.array());
   }
 
   try {
@@ -317,14 +391,17 @@ const getOrder = async (req, res, next) => {
             product: true,
           },
         },
+        address: {
+          include: {
+            customer: true,
+          },
+        },
       },
     });
-    if (orderDetail) {
-      return res.status(StatusCodes.OK).send(orderDetail);
+    if (!orderDetail) {
+      throw new NotFoundError(`Order with id ${orderId} not found`);
     }
-    return res
-      .status(StatusCodes.NOT_FOUND)
-      .json({ message: "No order items found" });
+    return res.status(StatusCodes.OK).send(orderDetail);
   } catch (error) {
     next(error);
   }
@@ -332,12 +409,6 @@ const getOrder = async (req, res, next) => {
 
 const getOrdersCount = async (req, res, next) => {
   const { customer_id } = req.user;
-
-  if (!customer_id) {
-    return res
-      .status(StatusCodes.BAD_REQUEST)
-      .send({ message: "Missing required fields" });
-  }
 
   try {
     const count = await prisma.order.count({
@@ -357,4 +428,6 @@ module.exports = {
   getOrdersCount,
   initiatePayment,
   handlePaymentResponse,
+  cashTransaction,
+  validateUserOrder,
 };

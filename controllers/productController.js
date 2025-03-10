@@ -3,23 +3,44 @@ const createDOMPurify = require("dompurify");
 const { JSDOM } = require("jsdom");
 
 const prisma = require("../prismaClient");
-const { cloudinary } = require("../services/cloudinary");
+const {
+  cloudinaryImageUploader,
+  deleteCloudinaryImage,
+} = require("../services/cloudinary");
+const ValidationError = require("../errors/ValidationError");
+const NotFoundError = require("../errors/NotFoundError");
+const { validationResult } = require("express-validator");
 
 const getAllProducts = async (req, res, next) => {
   const { query, page } = req.body;
-  const LIMIT = 10;
+  const errors = validationResult(req);
+
+  if (!errors.isEmpty()) {
+    const result = errors.formatWith(({ msg, param }) => {
+      return { message: msg, property: param };
+    });
+    throw new ValidationError("Incorrect data", result.array());
+  }
+
+  const LIMIT = 12;
   const currentPage = Number(page) || 1;
   try {
     let products = [];
     if (query) {
       products = await prisma.product.findMany({
         where: {
-          name: {
-            search: query,
-          },
-          description: {
-            search: query,
-          },
+          OR: [
+            {
+              name: {
+                contains: query,
+              },
+            },
+            {
+              description: {
+                contains: query,
+              },
+            },
+          ],
         },
         take: LIMIT,
         skip: (currentPage - 1) * LIMIT,
@@ -41,16 +62,31 @@ const getAllProducts = async (req, res, next) => {
 
 const getProductsCount = async (req, res, next) => {
   const { query } = req.body;
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const result = errors.formatWith(({ msg, param }) => {
+      return { message: msg, property: param };
+    });
+    throw new ValidationError("Incorrect data", result.array());
+  }
+
   try {
     if (query) {
       const count = await prisma.product.count({
         where: {
-          name: {
-            search: query,
-          },
-          description: {
-            search: query,
-          },
+          OR: [
+            {
+              name: {
+                contains: query,
+              },
+            },
+            {
+              description: {
+                contains: query,
+              },
+            },
+          ],
         },
       });
       return res.status(StatusCodes.OK).json({ count });
@@ -64,19 +100,26 @@ const getProductsCount = async (req, res, next) => {
 };
 
 const getProduct = async (req, res, next) => {
+  const { productId } = req.params;
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const result = errors.formatWith(({ msg, param }) => {
+      return { message: msg, property: param };
+    });
+    throw new ValidationError("Incorrect data", result.array());
+  }
+
   try {
-    const { productId } = req.params;
+    // throw new Error("Test error");
     const product = await prisma.product.findUnique({
       where: {
         product_id: productId,
       },
     });
     if (!product) {
-      return res
-        .status(StatusCodes.NOT_FOUND)
-        .send({ message: "Product not found" });
+      throw new NotFoundError(`Product with id ${productId} not found`);
     }
-    return res.status(StatusCodes.OK).json(product);
+    return res.status(StatusCodes.OK).send(product);
   } catch (error) {
     next(error);
   }
@@ -85,36 +128,33 @@ const getProduct = async (req, res, next) => {
 const createProduct = async (req, res, next) => {
   const { name, description, price, image_url } = req.body;
 
-  if (!name || !description || !price || !image_url) {
-    return res
-      .status(StatusCodes.BAD_REQUEST)
-      .send({ message: "Missing required fields" });
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const result = errors.formatWith(({ msg, param }) => {
+      return { message: msg, property: param };
+    });
+    throw new ValidationError("Incorrect data", result.array());
   }
-  let publicId;
+
   const window = new JSDOM("").window;
   const DOMPurify = createDOMPurify(window);
   const clean = DOMPurify.sanitize(description);
+  let publicId;
   try {
-    const resp = await cloudinary.uploader.upload(image_url, {
-      upload_preset: "oms",
-    });
-    publicId = resp.public_id;
+    const resp = await cloudinaryImageUploader(image_url);
+    publicId = resp;
     await prisma.product.create({
       data: {
         name,
         description: clean,
         price,
-        image_url: resp.public_id,
+        image_url: resp,
       },
     });
     return res.status(StatusCodes.CREATED).send({ message: "Product created" });
   } catch (error) {
     if (publicId) {
-      try {
-        await cloudinary.uploader.destroy(publicId);
-      } catch (error) {
-        next(error);
-      }
+      await deleteCloudinaryImage(publicId);
     }
     next(error);
   }
