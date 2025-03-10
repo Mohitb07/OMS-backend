@@ -3,6 +3,11 @@ FROM node:16-bullseye-slim as base
 
 # Set environment variable for base and all layers that inherit from it
 ENV NODE_ENV=production
+# Accept build arguments
+ARG MYSQL_URL
+ENV MYSQL_URL=$MYSQL_URL
+
+# Other Dockerfile commands remain the same
 
 # Install openssl for Prisma and ca-certificates
 RUN apt-get update && apt-get install -y openssl && apt-get install -y ca-certificates
