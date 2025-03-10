@@ -38,8 +38,6 @@ ADD prisma .
 
 RUN npx prisma generate
 
-RUN npx prisma migrate deploy
-
 ADD . .
 
 RUN chmod +x ./entrypoint.sh
@@ -56,5 +54,7 @@ COPY --from=production-deps /app/node_modules /app/node_modules
 COPY --from=build /app/node_modules/.prisma /app/node_modules/.prisma
 
 ADD . .
+
+RUN npx prisma migrate deploy
 
 CMD ["yarn", "start"]
