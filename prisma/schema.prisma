@@ -51,7 +51,7 @@ model Customer {
 model CustomerAddress {
   address_id  String   @id @default(cuid())
   country     String   @db.VarChar(255)
-  full_name   String   @db.VarChar(255)
+  full_name   String   @db.VarChar(1255)
   phone       String   @db.VarChar(15)
   pincode     String   @db.VarChar(10)
   flat_no     String   @db.VarChar(255)
