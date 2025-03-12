@@ -91,7 +91,7 @@ CREATE TABLE `Order` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
-CREATE TABLE `Product` (
+CREATE TABLE `product` (
     `product_id` VARCHAR(191) NOT NULL,
     `name` VARCHAR(255) NOT NULL,
     `description` VARCHAR(10000) NOT NULL,
@@ -100,8 +100,8 @@ CREATE TABLE `Product` (
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updatedAt` DATETIME(3) NOT NULL,
 
-    FULLTEXT INDEX `Product_name_idx`(`name`),
-    FULLTEXT INDEX `Product_name_description_idx`(`name`, `description`),
+    FULLTEXT INDEX `product_name_idx`(`name`),
+    FULLTEXT INDEX `product_name_description_idx`(`name`, `description`),
     PRIMARY KEY (`product_id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -109,7 +109,7 @@ CREATE TABLE `Product` (
 ALTER TABLE `CartItem` ADD CONSTRAINT `CartItem_ibfk_1` FOREIGN KEY (`cart_id`) REFERENCES `Cart`(`cart_id`) ON DELETE NO ACTION ON UPDATE NO ACTION;
 
 -- AddForeignKey
-ALTER TABLE `CartItem` ADD CONSTRAINT `CartItem_ibfk_2` FOREIGN KEY (`product_id`) REFERENCES `Product`(`product_id`) ON DELETE NO ACTION ON UPDATE NO ACTION;
+ALTER TABLE `CartItem` ADD CONSTRAINT `CartItem_ibfk_2` FOREIGN KEY (`product_id`) REFERENCES `product`(`product_id`) ON DELETE NO ACTION ON UPDATE NO ACTION;
 
 -- AddForeignKey
 ALTER TABLE `Cart` ADD CONSTRAINT `Cart_ibfk_1` FOREIGN KEY (`customer_id`) REFERENCES `Customer`(`customer_id`) ON DELETE NO ACTION ON UPDATE NO ACTION;
@@ -121,7 +121,7 @@ ALTER TABLE `CustomerAddress` ADD CONSTRAINT `CustomerAddress_ibfk_1` FOREIGN KE
 ALTER TABLE `OrderItem` ADD CONSTRAINT `OrderItem_ibfk_1` FOREIGN KEY (`order_id`) REFERENCES `Order`(`order_id`) ON DELETE NO ACTION ON UPDATE NO ACTION;
 
 -- AddForeignKey
-ALTER TABLE `OrderItem` ADD CONSTRAINT `OrderItem_ibfk_2` FOREIGN KEY (`product_id`) REFERENCES `Product`(`product_id`) ON DELETE NO ACTION ON UPDATE NO ACTION;
+ALTER TABLE `OrderItem` ADD CONSTRAINT `OrderItem_ibfk_2` FOREIGN KEY (`product_id`) REFERENCES `product`(`product_id`) ON DELETE NO ACTION ON UPDATE NO ACTION;
 
 -- AddForeignKey
 ALTER TABLE `Order` ADD CONSTRAINT `Order_ibfk_1` FOREIGN KEY (`customer_id`) REFERENCES `Customer`(`customer_id`) ON DELETE NO ACTION ON UPDATE NO ACTION;

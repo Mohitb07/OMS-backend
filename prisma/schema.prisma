@@ -103,7 +103,7 @@ model Order {
 model Product {
   product_id  String      @id @default(cuid())
   name        String      @db.VarChar(255)
-  description String      @db.VarChar(12000)
+  description String      @db.VarChar(10000)
   price       Decimal     @db.Decimal(10, 2)
   image_url   String      @db.VarChar(255)
   createdAt   DateTime    @default(now())
@@ -113,6 +113,7 @@ model Product {
 
   @@fulltext([name])
   @@fulltext([name, description])
+  @@map("product")
 }
 
 enum cart_status {
