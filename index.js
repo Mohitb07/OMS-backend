@@ -7,7 +7,7 @@ if (process.env.NODE_ENV === "production") {
 }
 
 const express = require("express");
-require('express-async-errors')
+require("express-async-errors");
 const cors = require("cors");
 const helmet = require("helmet");
 const morgan = require("morgan");
@@ -49,6 +49,9 @@ app.use(cartRoutes);
 app.use(orderRoutes);
 app.use(addressRoutes);
 app.use(errorHandler);
+app.use("/api/healthcheck", (req, res) => {
+  res.status(StatusCodes.OK).json({ message: "Server is running" });
+});
 
 // app.use((err, req, res, next) => {
 //   console.error(err.stack); // Log the stack trace
