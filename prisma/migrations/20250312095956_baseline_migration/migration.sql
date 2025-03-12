@@ -1,5 +1,5 @@
 -- CreateTable
-CREATE TABLE `CartItem` (
+CREATE TABLE `cartitem` (
     `cart_item_id` VARCHAR(191) NOT NULL,
     `quantity` INTEGER NULL,
     `total_amount` DECIMAL(10, 2) NULL,
@@ -14,20 +14,20 @@ CREATE TABLE `CartItem` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
-CREATE TABLE `Cart` (
+CREATE TABLE `cart` (
     `cart_id` VARCHAR(191) NOT NULL,
     `status` ENUM('active', 'completed') NULL,
     `customer_id` VARCHAR(191) NOT NULL,
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updatedAt` DATETIME(3) NOT NULL,
 
-    UNIQUE INDEX `Cart_customer_id_key`(`customer_id`),
+    UNIQUE INDEX `cart_customer_id_key`(`customer_id`),
     INDEX `customer_id`(`customer_id`),
     PRIMARY KEY (`cart_id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
-CREATE TABLE `Customer` (
+CREATE TABLE `customer` (
     `customer_id` VARCHAR(191) NOT NULL,
     `username` VARCHAR(255) NOT NULL,
     `email` VARCHAR(255) NOT NULL,
@@ -40,7 +40,7 @@ CREATE TABLE `Customer` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
-CREATE TABLE `CustomerAddress` (
+CREATE TABLE `customeraddress` (
     `address_id` VARCHAR(191) NOT NULL,
     `country` VARCHAR(255) NOT NULL,
     `full_name` VARCHAR(255) NOT NULL,
@@ -60,7 +60,7 @@ CREATE TABLE `CustomerAddress` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
-CREATE TABLE `OrderItem` (
+CREATE TABLE `orderitem` (
     `order_item_id` VARCHAR(191) NOT NULL,
     `total_amount` DECIMAL(10, 2) NOT NULL,
     `quantity` INTEGER NOT NULL,
@@ -75,7 +75,7 @@ CREATE TABLE `OrderItem` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- CreateTable
-CREATE TABLE `Order` (
+CREATE TABLE `order` (
     `order_id` VARCHAR(191) NOT NULL,
     `address_id` VARCHAR(255) NOT NULL,
     `payment_method` ENUM('cash', 'card') NOT NULL,
@@ -106,25 +106,25 @@ CREATE TABLE `product` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- AddForeignKey
-ALTER TABLE `CartItem` ADD CONSTRAINT `CartItem_ibfk_1` FOREIGN KEY (`cart_id`) REFERENCES `Cart`(`cart_id`) ON DELETE NO ACTION ON UPDATE NO ACTION;
+ALTER TABLE `cartitem` ADD CONSTRAINT `CartItem_ibfk_1` FOREIGN KEY (`cart_id`) REFERENCES `cart`(`cart_id`) ON DELETE NO ACTION ON UPDATE NO ACTION;
 
 -- AddForeignKey
-ALTER TABLE `CartItem` ADD CONSTRAINT `CartItem_ibfk_2` FOREIGN KEY (`product_id`) REFERENCES `product`(`product_id`) ON DELETE NO ACTION ON UPDATE NO ACTION;
+ALTER TABLE `cartitem` ADD CONSTRAINT `CartItem_ibfk_2` FOREIGN KEY (`product_id`) REFERENCES `product`(`product_id`) ON DELETE NO ACTION ON UPDATE NO ACTION;
 
 -- AddForeignKey
-ALTER TABLE `Cart` ADD CONSTRAINT `Cart_ibfk_1` FOREIGN KEY (`customer_id`) REFERENCES `Customer`(`customer_id`) ON DELETE NO ACTION ON UPDATE NO ACTION;
+ALTER TABLE `cart` ADD CONSTRAINT `Cart_ibfk_1` FOREIGN KEY (`customer_id`) REFERENCES `customer`(`customer_id`) ON DELETE NO ACTION ON UPDATE NO ACTION;
 
 -- AddForeignKey
-ALTER TABLE `CustomerAddress` ADD CONSTRAINT `CustomerAddress_ibfk_1` FOREIGN KEY (`customer_id`) REFERENCES `Customer`(`customer_id`) ON DELETE NO ACTION ON UPDATE NO ACTION;
+ALTER TABLE `customeraddress` ADD CONSTRAINT `CustomerAddress_ibfk_1` FOREIGN KEY (`customer_id`) REFERENCES `customer`(`customer_id`) ON DELETE NO ACTION ON UPDATE NO ACTION;
 
 -- AddForeignKey
-ALTER TABLE `OrderItem` ADD CONSTRAINT `OrderItem_ibfk_1` FOREIGN KEY (`order_id`) REFERENCES `Order`(`order_id`) ON DELETE NO ACTION ON UPDATE NO ACTION;
+ALTER TABLE `orderitem` ADD CONSTRAINT `OrderItem_ibfk_1` FOREIGN KEY (`order_id`) REFERENCES `order`(`order_id`) ON DELETE NO ACTION ON UPDATE NO ACTION;
 
 -- AddForeignKey
-ALTER TABLE `OrderItem` ADD CONSTRAINT `OrderItem_ibfk_2` FOREIGN KEY (`product_id`) REFERENCES `product`(`product_id`) ON DELETE NO ACTION ON UPDATE NO ACTION;
+ALTER TABLE `orderitem` ADD CONSTRAINT `OrderItem_ibfk_2` FOREIGN KEY (`product_id`) REFERENCES `product`(`product_id`) ON DELETE NO ACTION ON UPDATE NO ACTION;
 
 -- AddForeignKey
-ALTER TABLE `Order` ADD CONSTRAINT `Order_ibfk_1` FOREIGN KEY (`customer_id`) REFERENCES `Customer`(`customer_id`) ON DELETE NO ACTION ON UPDATE NO ACTION;
+ALTER TABLE `order` ADD CONSTRAINT `Order_ibfk_1` FOREIGN KEY (`customer_id`) REFERENCES `customer`(`customer_id`) ON DELETE NO ACTION ON UPDATE NO ACTION;
 
 -- AddForeignKey
-ALTER TABLE `Order` ADD CONSTRAINT `Order_ibfk_2` FOREIGN KEY (`address_id`) REFERENCES `CustomerAddress`(`address_id`) ON DELETE NO ACTION ON UPDATE NO ACTION;
+ALTER TABLE `order` ADD CONSTRAINT `Order_ibfk_2` FOREIGN KEY (`address_id`) REFERENCES `customeraddress`(`address_id`) ON DELETE NO ACTION ON UPDATE NO ACTION;
