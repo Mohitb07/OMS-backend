@@ -31,6 +31,7 @@ module.exports = (req, res, next) => {
           addresses: true,
           username: true,
           email: true,
+          avatar: true,
           customer_id: true,
           cart: {
             select: {
