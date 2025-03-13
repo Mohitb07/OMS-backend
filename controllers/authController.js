@@ -8,11 +8,12 @@ const { StatusCodes } = require("http-status-codes");
 const prisma = require("../prismaClient");
 const ValidationError = require("../errors/ValidationError");
 const UnauthorizedError = require("../errors/UnauthorizedError");
+const { getRandomAvatar } = require("../services/getRandomAvatar");
 
 const login = async (req, res, next) => {
   const { email, password } = req.body;
   const errors = validationResult(req);
-  
+
   if (!errors.isEmpty()) {
     const result = errors.formatWith(({ msg, param }) => {
       return { message: msg, property: param };
@@ -65,12 +66,14 @@ const register = async (req, res, next) => {
   }
   const salt = bcrypt.genSaltSync(10);
   const hashedPassword = bcrypt.hashSync(req.body.password, salt);
+  const avatar = await getRandomAvatar();
   try {
     const user = await prisma.customer.create({
       data: {
         email: req.body.email,
         username: req.body.username,
         password: hashedPassword,
+        avatar,
       },
     });
     const accessToken = jwt.sign(
