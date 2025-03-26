@@ -9,10 +9,13 @@ const {
 } = require("../services/cloudinary");
 const ValidationError = require("../errors/ValidationError");
 const NotFoundError = require("../errors/NotFoundError");
-const { validationResult } = require("express-validator");
+const { validationResult, query } = require("express-validator");
+const { processSearchQuery } = require("../services/aisearch");
+const { Prisma } = require("@prisma/client");
+const { getProductQuery } = require("../services/getProductQuery");
 
 const getAllProducts = async (req, res, next) => {
-  const { query, page } = req.body;
+  const { query, page, sortby } = req.body;
   const errors = validationResult(req);
 
   if (!errors.isEmpty()) {
@@ -26,36 +29,20 @@ const getAllProducts = async (req, res, next) => {
   const currentPage = Number(page) || 1;
   try {
     let products = [];
-    if (query) {
-      products = await prisma.product.findMany({
-        where: {
-          OR: [
-            {
-              name: {
-                contains: query,
-              },
-            },
-            {
-              description: {
-                contains: query,
-              },
-            },
-          ],
-        },
-        take: LIMIT,
-        skip: (currentPage - 1) * LIMIT,
-      });
-    } else {
-      products = await prisma.product.findMany({
-        take: LIMIT,
-        skip: (currentPage - 1) * LIMIT,
-      });
-    }
+    const filterQuery = await getProductQuery(query, sortby);
+
+    products = await prisma.product.findMany({
+      ...filterQuery,
+      take: LIMIT,
+      skip: (currentPage - 1) * LIMIT,
+    });
+
     if (products.length === 0) {
       return res.status(StatusCodes.OK).json([]);
     }
     return res.status(StatusCodes.OK).json(products);
   } catch (error) {
+    console.log("error", error);
     next(error);
   }
 };
@@ -153,6 +140,7 @@ const createProduct = async (req, res, next) => {
     });
     return res.status(StatusCodes.CREATED).send({ message: "Product created" });
   } catch (error) {
+    console.log("error", error);
     if (publicId) {
       await deleteCloudinaryImage(publicId);
     }
