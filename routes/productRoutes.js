@@ -26,6 +26,10 @@ router.post(
       .optional()
       .isString()
       .withMessage("Current page must be a string"),
+    body("sortby")
+      .optional()
+      .isString()
+      .withMessage("Sort by must be a string"),
   ],
   productController.getAllProducts
 );
