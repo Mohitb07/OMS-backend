@@ -36,6 +36,12 @@ const getProductQuery = async (userQuery, sortby) => {
     };
   }
 
+  if (sortby === "price-desc") {
+    query["orderBy"] = {
+      price: Prisma.SortOrder.desc,
+    };
+  }
+
   if (sortby === "name") {
     query["orderBy"] = {
       name: Prisma.SortOrder.asc,
