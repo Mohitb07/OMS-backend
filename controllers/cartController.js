@@ -120,7 +120,7 @@ const addToCart = async (req, res, next) => {
     }
     return res.status(StatusCodes.CREATED).send({ cartItem });
   } catch (error) {
-    console.log('ERROR ON ADD TO CART', error);
+    console.log("ERROR ON ADD TO CART", error);
     next(error);
   }
 };
@@ -188,6 +188,7 @@ const updateCartQuantity = async (req, res, next) => {
 
     return res.status(StatusCodes.OK).json(updatedCartItem);
   } catch (error) {
+    console.log("ERROR ON ADD TO CART", error);
     next(error);
   }
 };
