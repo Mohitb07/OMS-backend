@@ -120,6 +120,7 @@ const addToCart = async (req, res, next) => {
     }
     return res.status(StatusCodes.CREATED).send({ cartItem });
   } catch (error) {
+    console.log('ERROR ON ADD TO CART', error);
     next(error);
   }
 };
