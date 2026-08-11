@@ -43,14 +43,34 @@ model Customer {
   username    String            @db.VarChar(255)
   email       String            @unique(map: "email") @db.VarChar(255)
   password    String            @db.VarChar(255)
-  avatar      String            @db.VarChar(1000) @default("")
+  avatar      String            @default("") @db.VarChar(1000)
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
   orders      Order[]
   cart        Cart?
   addresses   CustomerAddress[]
+  sessions    CustomerSession[]
 
   @@map("customer")
+}
+
+model CustomerSession {
+  session_id         String    @id @default(cuid())
+  customer_id        String
+  refresh_token_hash String    @unique(map: "refresh_token_hash_unique") @db.VarChar(255)
+  family_id          String?   @db.VarChar(255)
+  user_agent         String?   @db.VarChar(1000)
+  ip_address_hash    String?   @db.VarChar(255)
+  revoked            Boolean   @default(false)
+  expiresAt          DateTime
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  lastUsedAt         DateTime?
+  customer           Customer  @relation(fields: [customer_id], references: [customer_id], onDelete: NoAction, onUpdate: NoAction, map: "CustomerSession_ibfk_1")
+
+  @@index([customer_id], map: "customer_id")
+  @@index([family_id], map: "family_id")
+  @@map("customersession")
 }
 
 model CustomerAddress {

@@ -1,5 +1,12 @@
 node_modules
 .env
+.env.production
+.git
+.gitignore
+fly.toml
+yarn-error.log
+README.md
+data.json
 
 # Local Netlify folder
 .netlify

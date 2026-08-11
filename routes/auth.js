@@ -3,6 +3,7 @@ const router = new express.Router();
 const { body } = require("express-validator");
 
 const authController = require("../controllers/authController");
+const auth = require("../middleware/auth");
 
 // login user
 router.post(
@@ -39,5 +40,11 @@ router.post(
   ],
   authController.register
 );
+
+router.post("/refresh", authController.refreshToken);
+
+router.post("/logout", authController.logout);
+
+router.post("/logout_all", auth, authController.logoutAll);
 
 module.exports = router;

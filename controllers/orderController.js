@@ -63,10 +63,18 @@ const createUserOrder = async (
       order = await transaction.order.create({
         data: {
           payment_method,
-          address_id,
-          customer_id,
           order_amount: calculateCartPrice(cartItems),
           status: "pending",
+          customer: {
+            connect: {
+              customer_id,
+            },
+          },
+          address: {
+            connect: {
+              address_id,
+            },
+          },
         },
       });
 
@@ -90,8 +98,8 @@ const createUserOrder = async (
 };
 
 const cashTransaction = async (req, res, next) => {
-  const { cart_id, address_id, payment_method } = req.body;
-  const { customer_id } = req.user;
+  const { cart_id, address_id, payment_method } = req.body;     
+  const { id: customer_id } = req.user;
 
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -101,14 +109,14 @@ const cashTransaction = async (req, res, next) => {
     throw new ValidationError("Incorrect data", result.array());
   }
 
-  if (!payment_method === "cash") {
+  if (payment_method !== "cash") {
     throw new BadRequestError("Invalid payment method");
   }
-  let orderId = null;
+  let orderId = null;              
   try {
     const { order, userCart } = await createUserOrder(
       payment_method,
-      address_id,
+      address_id  ,
       customer_id,
       cart_id
     );
@@ -160,7 +168,7 @@ const initiatePayment = async (req, res, next) => {
     payment_method,
   } = req.body;
   try {
-    const { customer_id } = req.user;
+    const { id: customer_id } = req.user;
 
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -170,7 +178,7 @@ const initiatePayment = async (req, res, next) => {
       throw new ValidationError("Incorrect data", result.array());
     }
 
-    if (!payment_method === "card") {
+    if (payment_method !== "card") {
       throw new BadRequestError("Invalid payment method");
     }
 
@@ -216,8 +224,8 @@ const handlePaymentResponse = async (req, res) => {
     req.body;
   const params = { txnid, amount, productinfo, firstname, email };
   const generatedHash = verifyPaymentHash(params, status);
-  const orderId = productinfo.split(" ")[0];
-  const cartId = productinfo.split(" ")[1];
+  const orderId = productinfo.split(",")[0];
+  const cartId = productinfo.split(",")[1];
 
   if (generatedHash === hash) {
     if (status === "success") {
@@ -267,13 +275,15 @@ const handlePaymentResponse = async (req, res) => {
       }
     }
   } else {
-    throw new ValidationError("Invalid payment hash");
+    throw new ValidationError("Invalid payment hash", [
+      { message: "Invalid payment hash", property: "hash" },
+    ]);
   }
 };
 
 const validateUserOrder = async (req, res, next) => {
   const { orderId } = req.params;
-  const { customer_id } = req.user;
+  const { id: customer_id } = req.user;
 
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -328,15 +338,16 @@ const processRefund = async (txnId, amount) => {
 };
 
 const getOrders = async (req, res, next) => {
-  const { customer_id } = req.user;
+  const { id } = req.user;
   const { userId } = req.params;
+  console.log("USER ID IN ORDER CONTROLLER 🤣🤣🤣", id, userId);
   try {
-    if (userId !== customer_id) {
+    if (userId !== id) {
       throw new ForbiddenError("You are not authorized to continue");
     }
     const customer = await prisma.customer.findUnique({
       where: {
-        customer_id,
+        customer_id: id,
       },
       include: {
         orders: {
@@ -360,9 +371,9 @@ const getOrders = async (req, res, next) => {
     });
 
     if (!customer) {
-      throw new NotFoundError(`Customer with id ${customer_id} not found`);
+      throw new NotFoundError(`Customer with id ${id} not found`);
     }
-
+    console.log("CUSTOMER ORDERS 🤣🤣🤣🤣", customer.orders);
     return res.status(StatusCodes.OK).send(customer.orders || []);
   } catch (error) {
     next(error);
@@ -371,7 +382,7 @@ const getOrders = async (req, res, next) => {
 
 const getOrder = async (req, res, next) => {
   const { orderId } = req.params;
-
+  console.log('get order')
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     const result = errors.formatWith(({ msg, param }) => {
@@ -408,7 +419,7 @@ const getOrder = async (req, res, next) => {
 };
 
 const getOrdersCount = async (req, res, next) => {
-  const { customer_id } = req.user;
+  const { id: customer_id } = req.user;
 
   try {
     const count = await prisma.order.count({
