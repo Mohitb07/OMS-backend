@@ -11,6 +11,7 @@ require("express-async-errors");
 const cors = require("cors");
 const helmet = require("helmet");
 const morgan = require("morgan");
+const cookieParser = require("cookie-parser");
 const { StatusCodes } = require("http-status-codes");
 
 const authRoutes = require("./routes/auth");
@@ -20,8 +21,9 @@ const cartRoutes = require("./routes/cartRoutes");
 const orderRoutes = require("./routes/orderRoutes");
 const addressRoutes = require("./routes/addressRoutes");
 const corsConfig = require("./config/corsConfig");
-const connection = require("./config/database");
 const errorHandler = require("./middleware/globalErrorHandler");
+
+const prisma = require("./prismaClient");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -33,25 +35,19 @@ app.use(helmet());
 app.use(morgan("combined"));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
+app.use(cookieParser());
 
-connection.connect(function (err) {
-  if (err) {
-    console.error("Error connecting to MySQL database: ", err);
-    process.exit(1);
-  }
-  console.log("Connected to MySQL database.");
-});
 
-app.use(authRoutes);
+app.use("/auth", authRoutes);
 app.use(userRoutes);
 app.use(productRoutes);
 app.use(cartRoutes);
 app.use(orderRoutes);
 app.use(addressRoutes);
-app.use(errorHandler);
 app.use("/api/healthcheck", (req, res) => {
   res.status(StatusCodes.OK).json({ message: "Server is running" });
 });
+app.use(errorHandler);
 
 // app.use((err, req, res, next) => {
 //   console.error(err.stack); // Log the stack trace
@@ -62,8 +58,14 @@ app.use("/api/healthcheck", (req, res) => {
 //   res.status(statusCode).json({ message });
 // });
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`Server is running on port ${PORT}`);
+  try {
+    await prisma.$connect();
+    console.log("Connected to MySQL database.");
+  } catch (error) {
+    console.error("Error connecting to MySQL database: ", error);
+  }
 });
 
 // Handle unhandled promise rejections

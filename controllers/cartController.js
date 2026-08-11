@@ -6,11 +6,12 @@ const { validationResult } = require("express-validator");
 const { products } = prisma;
 
 const getCart = async (req, res, next) => {
-  const { customer_id } = req.user;
+  const { id } = req.user;
+  console.log("USER ID IN CART CONTROLLER", id);
   try {
     const userCart = await prisma.cart.findFirst({
       where: {
-        customer_id,
+        customer_id: id,
         status: "active",
       },
       include: {
@@ -22,6 +23,7 @@ const getCart = async (req, res, next) => {
       },
     });
     const cart = userCart;
+    console.log("USER CART 🤣🤣🤣🤣", cart);
     return res.status(StatusCodes.OK).send(cart || {});
   } catch (error) {
     next(error);
@@ -29,14 +31,14 @@ const getCart = async (req, res, next) => {
 };
 
 const getCartItemsCount = async (req, res, next) => {
-  const { customer_id } = req.user;
+  const { id } = req.user;
 
   try {
     // FIND BETTER WAY
     const count = await prisma.cartItem.count({
       where: {
         cart: {
-          customer_id: customer_id,
+          customer_id: id,
         },
       },
     });
@@ -47,7 +49,7 @@ const getCartItemsCount = async (req, res, next) => {
 };
 
 const addToCart = async (req, res, next) => {
-  const { customer_id } = req.user;
+  const { id } = req.user;
   const { product_id } = req.body;
 
   const errors = validationResult(req);
@@ -62,7 +64,7 @@ const addToCart = async (req, res, next) => {
   try {
     const user = await prisma.customer.findUnique({
       where: {
-        customer_id,
+        customer_id: id,
       },
     });
     if (!user) {
@@ -79,7 +81,7 @@ const addToCart = async (req, res, next) => {
 
     let cart = await prisma.cart.findFirst({
       where: {
-        customer_id,
+        customer_id: id,
         status: "active",
       },
     });
@@ -87,7 +89,7 @@ const addToCart = async (req, res, next) => {
     if (!cart) {
       cart = await prisma.cart.create({
         data: {
-          customer_id,
+          customer_id: id,
           status: "active",
         },
       });
@@ -95,6 +97,7 @@ const addToCart = async (req, res, next) => {
 
     const productInCart = await prisma.cartItem.findFirst({
       where: {
+        cart_id: cart.cart_id,
         product_id,
       },
     });
@@ -147,8 +150,6 @@ const updateCartQuantity = async (req, res, next) => {
         product: true,
       },
     });
-
-    cartItem.product.price;
 
     if (!cartItem) {
       throw new NotFoundError("Cart item not found");

@@ -8,7 +8,7 @@ const router = new express.Router();
 
 router.get(
   "/products/:productId",
-  [param("productId").isString().withMessage("Product ID must be an integer")],
+  [param("productId").isString().withMessage("Product ID must be a string")],
   productController.getProduct
 );
 

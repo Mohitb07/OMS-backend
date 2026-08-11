@@ -8,7 +8,7 @@ const getAddresses = async (req, res, next) => {
   try {
     const addresses = await prisma.customerAddress.findMany({
       where: {
-        customer_id: req.user.customer_id,
+        customer_id: req.user.id,
       },
     });
     return res.status(StatusCodes.OK).json(addresses);
@@ -79,7 +79,7 @@ const createAddress = async (req, res, next) => {
         default: isDefault,
         city,
         state,
-        customer_id: user.customer_id,
+        customer_id: user.id,
         // customer_id: req.user.customer_id,
         // customers: {
         //   connect: {
@@ -90,11 +90,13 @@ const createAddress = async (req, res, next) => {
     });
     return res.status(StatusCodes.CREATED).json(address);
   } catch (error) {
+    console.log("ERROR", error);
     next(error);
   }
 };
 
 const updateAddress = async (req, res, next) => {
+  console.log("UPDATE ADDRESS REQ BODY", req.body);
   const { country, state, pinCode, mobile, name, city, apartment, area } =
     req.body;
 
@@ -114,7 +116,6 @@ const updateAddress = async (req, res, next) => {
         address_id: addressId,
       },
     });
-
     if (!address) {
       return res
         .status(StatusCodes.NOT_FOUND)
@@ -126,7 +127,6 @@ const updateAddress = async (req, res, next) => {
         address_id: addressId,
       },
       data: {
-        ...address[0],
         country,
         full_name: name,
         phone: mobile,
@@ -144,9 +144,35 @@ const updateAddress = async (req, res, next) => {
   }
 };
 
+const deleteAddress = async (req, res, next) => {
+  try {
+    const { addressId } = req.params;
+    console.log("DELETE ADDRESS ID", addressId);
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      const result = errors.formatWith(({ msg, param }) => {
+        return { message: msg, property: param };
+      });
+      throw new ValidationError("Incorrect data", result.array());
+    }
+
+    await prisma.customerAddress.delete({
+      where: {
+        address_id: addressId,
+      },
+    });
+
+    return res.status(StatusCodes.OK).json({ message: "Address deleted successfully" });
+  } catch (error) {
+    console.error("DELETE ADDRESS ERROR", error);
+    next(error);
+  }
+};
+
 module.exports = {
   createAddress,
   getAddresses,
   updateAddress,
   getAddressById,
+  deleteAddress,
 };

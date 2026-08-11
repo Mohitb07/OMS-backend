@@ -23,7 +23,7 @@ router.patch(
   auth,
   [
     ...validateAddress,
-    [param("addressId").isString().withMessage("Address ID must be a string")],
+    param("addressId").isString().withMessage("Address ID must be a string"),
   ],
   addressController.updateAddress
 );
@@ -33,6 +33,13 @@ router.get(
   [param("addressId").isString().withMessage("Address ID must be a string")],
   auth,
   addressController.getAddressById
+);
+
+router.delete(
+  "/delete_address/:addressId",
+  [param("addressId").isString().withMessage("Address ID must be a string")],
+  auth,
+  addressController.deleteAddress
 );
 
 module.exports = router;

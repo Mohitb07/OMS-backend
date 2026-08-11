@@ -5,56 +5,31 @@ const { StatusCodes } = require("http-status-codes");
 const UnauthorizedError = require("../errors/UnauthorizedError");
 
 module.exports = (req, res, next) => {
-  // Extract the access token from the Authorization header
-  const authHeader = req.headers.authorization;
-  const accessToken = authHeader && authHeader.split(" ")[1];
-  // Check if the access token is present
-  if (!accessToken) {
-    throw new UnauthorizedError("Unauthorised, token missing");
+  const authHeader = req.headers["authorization"];
+  console.log("Auth middleware - authHeader:", authHeader);
+  if (!authHeader?.startsWith("Bearer ")) {
+    return res.status(401).json({ message: "Missing Authorization header" });
   }
 
-  // Verify the access token
-  jwt.verify(accessToken, process.env.JWT_SECRET, async (err, payload) => {
-    try {
-      if (err) {
-        throw new UnauthorizedError(
-          "Token is invalid, please login to get a new token"
-        );
-      }
-      // Check if the user still exists in the database
-      const user = await prisma.customer.findUnique({
-        where: {
-          customer_id: payload.userId,
-        },
-        select: {
-          password: false,
-          addresses: true,
-          username: true,
-          email: true,
-          avatar: true,
-          customer_id: true,
-          cart: {
-            select: {
-              cart_id: true,
-              status: false,
-              customer_id: true,
-              cart_items: true,
-            },
-          },
-        },
-      });
-      // const user = await Customer.findByPk(payload.userId);
-      if (!user) {
-        throw new UnauthorizedError("User does not exist");
-      }
+  const token = authHeader.substring("Bearer ".length);
 
-      // Store the user object in the request object for future use
-      req.user = user;
+  // console.log("Auth middleware - token:", token);
 
-      // Call the next middleware function
-      next();
-    } catch (error) {
-      next(error);
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    // attach to req
+    req.user = {
+      id: decoded.sub,
+      customer_id: decoded.sub,
+      email: decoded.email,
+      username: decoded.username,
+    };
+    next();
+  } catch (err) {
+    console.error("Auth middleware error:", err);
+    if (err.name === "TokenExpiredError") {
+      return res.status(401).json({ message: "ACCESS_TOKEN_EXPIRED" });
     }
-  });
+    return res.status(401).json({ message: "Invalid token" });
+  }
 };

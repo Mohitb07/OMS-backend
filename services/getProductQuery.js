@@ -6,28 +6,30 @@ const getProductQuery = async (userQuery, sortby) => {
 
   if (userQuery) {
     const result = await processSearchQuery(userQuery);
-    query["where"] = {
-      OR: [
-        {
-          name: {
-            contains: result.productName ? result.productName : undefined,
+    if (result) {
+      query["where"] = {
+        OR: [
+          {
+            name: {
+              contains: result.productName ? result.productName : undefined,
+            },
+            price: {
+              gte: result.minPrice ? result.minPrice : undefined,
+              lte: result.maxPrice ? result.maxPrice : undefined,
+            },
           },
-          price: {
-            gte: result.minPrice ? result.minPrice : undefined,
-            lte: result.maxPrice ? result.maxPrice : undefined,
+          {
+            description: {
+              contains: result.productName ? result.productName : undefined,
+            },
+            price: {
+              gte: result.minPrice ? result.minPrice : undefined,
+              lte: result.maxPrice ? result.maxPrice : undefined,
+            },
           },
-        },
-        {
-          description: {
-            contains: result.productName ? result.productName : undefined,
-          },
-          price: {
-            gte: result.minPrice ? result.minPrice : undefined,
-            lte: result.maxPrice ? result.maxPrice : undefined,
-          },
-        },
-      ],
-    };
+        ],
+      };
+    }
   }
 
   if (sortby === "price") {

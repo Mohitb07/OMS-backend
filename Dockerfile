@@ -1,11 +1,11 @@
 # base node image
-FROM node:16-bullseye-slim as base
+FROM node:20-bullseye-slim as base
 
 # set for base and all layer that inherit from it
 ENV NODE_ENV=production
 
 # Install openssl for Prisma
-RUN apt-get update && apt-get install -y openssl && apt-get install -y ca-certificates
+RUN apt-get update && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/*
 
 # Install all node_modules, including dev dependencies
 FROM base as deps
@@ -27,22 +27,18 @@ ADD package.json yarn.lock ./
 
 RUN yarn install --production=true
 
-# Build the app
+# Build the app (generate Prisma client)
 FROM base as build
 
 WORKDIR /app
 
 COPY --from=deps /app/node_modules /app/node_modules
 
-ADD prisma .
+# NOTE: "ADD prisma prisma/" ensures schema.prisma lands in /app/prisma/
+# Previously "ADD prisma ." put files directly into /app/ which broke prisma generate
+ADD prisma prisma/
 
 RUN npx prisma generate
-
-ADD . .
-
-RUN chmod +x ./entrypoint.sh
-
-RUN ./entrypoint.sh
 
 # Finally, build the production image with minimal footprint
 FROM base
@@ -55,4 +51,6 @@ COPY --from=build /app/node_modules/.prisma /app/node_modules/.prisma
 
 ADD . .
 
-CMD ["yarn", "start"]
+EXPOSE 3000
+
+CMD ["sh", "-c", "npx prisma migrate deploy && node index.js"]
