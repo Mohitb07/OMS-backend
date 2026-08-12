@@ -68,26 +68,50 @@ const createAddress = async (req, res, next) => {
   }
 
   try {
-    const address = await prisma.customerAddress.create({
-      data: {
-        country,
-        full_name: name,
-        phone: mobile,
-        pincode: pinCode,
-        flat_no: apartment,
-        street: area,
-        default: isDefault,
-        city,
-        state,
-        customer_id: user.id,
-        // customer_id: req.user.customer_id,
-        // customers: {
-        //   connect: {
-        //     customer_id: req.user.customer_id,
-        //   },
-        // },
-      },
-    });
+    let address;
+    if (isDefault) {
+      const [_, createdAddress] = await prisma.$transaction([
+        prisma.customerAddress.updateMany({
+          where: {
+            customer_id: user.id,
+          },
+          data: {
+            default: false,
+          },
+        }),
+        prisma.customerAddress.create({
+          data: {
+            country,
+            full_name: name,
+            phone: mobile,
+            pincode: pinCode,
+            flat_no: apartment,
+            street: area,
+            default: true,
+            city,
+            state,
+            customer_id: user.id,
+          },
+        }),
+      ]);
+      address = createdAddress;
+    } else {
+      address = await prisma.customerAddress.create({
+        data: {
+          country,
+          full_name: name,
+          phone: mobile,
+          pincode: pinCode,
+          flat_no: apartment,
+          street: area,
+          default: Boolean(isDefault),
+          city,
+          state,
+          customer_id: user.id,
+        },
+      });
+    }
+
     return res.status(StatusCodes.CREATED).json(address);
   } catch (error) {
     console.log("ERROR", error);
@@ -97,8 +121,17 @@ const createAddress = async (req, res, next) => {
 
 const updateAddress = async (req, res, next) => {
   console.log("UPDATE ADDRESS REQ BODY", req.body);
-  const { country, state, pinCode, mobile, name, city, apartment, area } =
-    req.body;
+  const {
+    country,
+    state,
+    pinCode,
+    mobile,
+    name,
+    city,
+    apartment,
+    area,
+    isDefault,
+  } = req.body;
 
   const { addressId } = req.params;
 
@@ -122,21 +155,54 @@ const updateAddress = async (req, res, next) => {
         .json({ message: "Address not found" });
     }
 
-    const updatedAddress = await prisma.customerAddress.update({
-      where: {
-        address_id: addressId,
-      },
-      data: {
-        country,
-        full_name: name,
-        phone: mobile,
-        pincode: pinCode,
-        flat_no: apartment,
-        street: area,
-        city,
-        state,
-      },
-    });
+    let updatedAddress;
+
+    if (isDefault) {
+      const [_, resultAddress] = await prisma.$transaction([
+        prisma.customerAddress.updateMany({
+          where: {
+            customer_id: req.user.id,
+          },
+          data: {
+            default: false,
+          },
+        }),
+        prisma.customerAddress.update({
+          where: {
+            address_id: addressId,
+          },
+          data: {
+            country,
+            full_name: name,
+            phone: mobile,
+            pincode: pinCode,
+            flat_no: apartment,
+            street: area,
+            city,
+            state,
+            default: true,
+          },
+        }),
+      ]);
+      updatedAddress = resultAddress;
+    } else {
+      updatedAddress = await prisma.customerAddress.update({
+        where: {
+          address_id: addressId,
+        },
+        data: {
+          country,
+          full_name: name,
+          phone: mobile,
+          pincode: pinCode,
+          flat_no: apartment,
+          street: area,
+          city,
+          state,
+          ...(isDefault !== undefined && { default: Boolean(isDefault) }),
+        },
+      });
+    }
 
     return res.status(StatusCodes.OK).json(updatedAddress);
   } catch (error) {
@@ -162,9 +228,59 @@ const deleteAddress = async (req, res, next) => {
       },
     });
 
-    return res.status(StatusCodes.OK).json({ message: "Address deleted successfully" });
+    return res
+      .status(StatusCodes.OK)
+      .json({ message: "Address deleted successfully" });
   } catch (error) {
     console.error("DELETE ADDRESS ERROR", error);
+    next(error);
+  }
+};
+
+const setDefaultAddress = async (req, res, next) => {
+  const { addressId } = req.params;
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const result = errors.formatWith(({ msg, param }) => {
+      return { message: msg, property: param };
+    });
+    throw new ValidationError("Incorrect data", result.array());
+  }
+
+  try {
+    const address = await prisma.customerAddress.findFirst({
+      where: {
+        address_id: addressId,
+        customer_id: req.user.id,
+      },
+    });
+
+    if (!address) {
+      throw new NotFoundError(`Address with id ${addressId} not found`);
+    }
+
+    const [_, updatedAddress] = await prisma.$transaction([
+      prisma.customerAddress.updateMany({
+        where: {
+          customer_id: req.user.id,
+        },
+        data: {
+          default: false,
+        },
+      }),
+      prisma.customerAddress.update({
+        where: {
+          address_id: addressId,
+        },
+        data: {
+          default: true,
+        },
+      }),
+    ]);
+
+    return res.status(StatusCodes.OK).json(updatedAddress);
+  } catch (error) {
     next(error);
   }
 };
@@ -175,4 +291,6 @@ module.exports = {
   updateAddress,
   getAddressById,
   deleteAddress,
+  setDefaultAddress,
 };
+

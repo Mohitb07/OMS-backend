@@ -42,4 +42,12 @@ router.delete(
   addressController.deleteAddress
 );
 
+// set default address
+router.patch(
+  "/set_default_address/:addressId",
+  [param("addressId").isString().withMessage("Address ID must be a string")],
+  auth,
+  addressController.setDefaultAddress
+);
+
 module.exports = router;
