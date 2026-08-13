@@ -59,32 +59,16 @@ const getProductsCount = async (req, res, next) => {
   }
 
   try {
-    if (query) {
-      const count = await prisma.product.count({
-        where: {
-          OR: [
-            {
-              name: {
-                contains: query,
-              },
-            },
-            {
-              description: {
-                contains: query,
-              },
-            },
-          ],
-        },
-      });
-      return res.status(StatusCodes.OK).json({ count });
-    } else {
-      const count = await prisma.product.count();
-      return res.status(StatusCodes.OK).json({ count });
-    }
+    const filterQuery = await getProductQuery(query);
+    const count = await prisma.product.count(
+      filterQuery.where ? { where: filterQuery.where } : undefined
+    );
+    return res.status(StatusCodes.OK).json({ count });
   } catch (error) {
     next(error);
   }
 };
+
 
 const getProduct = async (req, res, next) => {
   const { productId } = req.params;

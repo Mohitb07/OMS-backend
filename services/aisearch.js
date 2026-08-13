@@ -1,38 +1,52 @@
-const OpenAI = require("openai");
+function fallbackSearchProcessor(query) {
+  if (!query || typeof query !== "string") {
+    return { productName: "", minPrice: "", maxPrice: "" };
+  }
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+  let trimmed = query.trim();
+  let minPrice = "";
+  let maxPrice = "";
+
+  // Match "under 500" / "below 500" / "less than 500" / "< 500"
+  const underMatch = trimmed.match(/(?:under|below|less than|<)\s*(\d+(?:\.\d+)?)/i);
+  if (underMatch) {
+    maxPrice = underMatch[1];
+    trimmed = trimmed.replace(underMatch[0], "").trim();
+  }
+
+  // Match "over 500" / "above 500" / "more than 500" / "> 500"
+  const overMatch = trimmed.match(/(?:over|above|more than|>)\s*(\d+(?:\.\d+)?)/i);
+  if (overMatch) {
+    minPrice = overMatch[1];
+    trimmed = trimmed.replace(overMatch[0], "").trim();
+  }
+
+  // Match "between 500 and 1000" / "500 to 1000" / "500 - 1000"
+  const betweenMatch = trimmed.match(/(?:between\s*)?(\d+(?:\.\d+)?)\s*(?:and|to|-)\s*(\d+(?:\.\d+)?)/i);
+  if (betweenMatch && !underMatch && !overMatch) {
+    minPrice = betweenMatch[1];
+    maxPrice = betweenMatch[2];
+    trimmed = trimmed.replace(betweenMatch[0], "").trim();
+  }
+
+  const productName = trimmed.replace(/\s+/g, " ").trim();
+
+  return {
+    productName,
+    minPrice,
+    maxPrice,
+  };
+}
 
 async function processSearchQuery(query) {
-  const response = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
-    max_tokens: 200,
-    messages: [
-      {
-        role: "system",
-        content: `
-          You are a search query processor. Extract keywords and a price range (if a user ask under certain amount then maxPrice is that amount and minPrice is 1, if a user ask over certain amount then minPrice is that amount and maxPrice is 10000000000 and if both the values are missing then only the values must be empty string "") from the following query: "${query}".
-          Format the output as a JSON object. Example: { "productName": "product name", "minPrice": "500", "maxPrice": "1000" }.
-          `,
-      },
-    ],
-  });
-
-  const rawOutput = response.choices[0].message.content;
-  console.log("Raw Output:", rawOutput);
-
-  // Parse the raw output into JSON
-  try {
-    const extractedData = JSON.parse(rawOutput);
-    console.log("Parsed Data:", extractedData);
-    return extractedData;
-  } catch (error) {
-    console.error("Error parsing JSON:", error);
-    return null; // Handle gracefully
+  if (!query || typeof query !== "string" || query.trim() === "") {
+    return { productName: "", minPrice: "", maxPrice: "" };
   }
+
+  return fallbackSearchProcessor(query);
 }
 
 module.exports = {
   processSearchQuery,
+  fallbackSearchProcessor,
 };
