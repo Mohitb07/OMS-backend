@@ -19,6 +19,68 @@ const {
   issueTokensForCustomers,
 } = require("../lib/utils");
 
+const REFRESH_REUSE_GRACE_MS = parseInt(
+  process.env.REFRESH_REUSE_GRACE_MS || "10000",
+  10,
+);
+
+function getRequestIpHash(req) {
+  return req.ip ? hashRefreshToken(req.ip) : null;
+}
+
+function isSameRefreshClient(req, session) {
+  const requestUserAgent = req.headers["user-agent"] || null;
+  const requestIpHash = getRequestIpHash(req);
+
+  return (
+    (session.user_agent || null) === requestUserAgent &&
+    (session.ip_address_hash || null) === requestIpHash
+  );
+}
+
+function isRecentRefreshUse(session, now) {
+  if (!session.lastUsedAt) return false;
+  return now.getTime() - session.lastUsedAt.getTime() <= REFRESH_REUSE_GRACE_MS;
+}
+
+function sendRefreshAccessToken(res, customer, status = StatusCodes.OK) {
+  const accessToken = generateAccessToken(customer);
+
+  return res.status(status).json({
+    accessToken,
+    user: {
+      id: customer.customer_id,
+      email: customer.email,
+      username: customer.username,
+      avatar: customer.avatar,
+    },
+  });
+}
+
+async function rotateRefreshSession(req, res, session, customer, now, status) {
+  const newRefreshTokenValue = generateRefreshToken();
+  const newRefreshTokenHash = hashRefreshToken(newRefreshTokenValue);
+  const newExpiresAt = new Date(
+    now.getTime() + REFRESH_TOKEN_EXPIRES_IN_DAYS * 24 * 60 * 60 * 1000,
+  );
+
+  await prisma.customerSession.create({
+    data: {
+      customer_id: customer.customer_id,
+      refresh_token_hash: newRefreshTokenHash,
+      family_id: session.family_id,
+      user_agent: req.headers["user-agent"] || session.user_agent,
+      ip_address_hash: getRequestIpHash(req) || session.ip_address_hash,
+      expiresAt: newExpiresAt,
+      lastUsedAt: now,
+    },
+  });
+
+  setRefreshTokenCookie(res, newRefreshTokenValue);
+
+  return sendRefreshAccessToken(res, customer, status);
+}
+
 const login = async (req, res, next) => {
   const { email, password } = req.body;
   const errors = validationResult(req);
@@ -131,6 +193,7 @@ const refreshToken = async (req, res, next) => {
         .status(StatusCodes.UNAUTHORIZED)
         .json({ message: "Not authenticated" });
     }
+
     const refreshTokenHash = hashRefreshToken(refreshTokenValue);
     const session = await prisma.customerSession.findUnique({
       where: {
@@ -149,8 +212,9 @@ const refreshToken = async (req, res, next) => {
         .json({ message: "Invalid refresh token" });
     }
 
-    // expired?
-    if (session.expiresAt < new Date()) {
+    const now = new Date();
+
+    if (session.expiresAt < now) {
       console.log("Refresh token expired");
       clearRefreshTokenCookie(res);
       return res
@@ -158,9 +222,79 @@ const refreshToken = async (req, res, next) => {
         .json({ message: "Refresh token expired" });
     }
 
-    // Token reuse detection – token already revoked but still used
+    // A tiny same-client grace window prevents normal concurrent refreshes
+    // from revoking the whole session family.
     if (session.revoked) {
-      // Revoke entire session family to lock out potential attacker
+      if (isSameRefreshClient(req, session) && isRecentRefreshUse(session, now)) {
+        return rotateRefreshSession(
+          req,
+          res,
+          session,
+          session.customer,
+          now,
+          StatusCodes.OK,
+        );
+      }
+
+      if (session.family_id) {
+        await prisma.customerSession.updateMany({
+          where: {
+            family_id: session.family_id,
+            revoked: false,
+          },
+          data: {
+            revoked: true,
+          },
+        });
+      }
+
+      clearRefreshTokenCookie(res);
+      return res
+        .status(StatusCodes.UNAUTHORIZED)
+        .json({ message: "Refresh token reused / revoked" });
+    }
+
+    const claim = await prisma.customerSession.updateMany({
+      where: {
+        session_id: session.session_id,
+        revoked: false,
+      },
+      data: {
+        revoked: true,
+        lastUsedAt: now,
+      },
+    });
+
+    if (claim.count === 0) {
+      const claimedSession = await prisma.customerSession.findUnique({
+        where: {
+          session_id: session.session_id,
+        },
+        include: {
+          customer: true,
+        },
+      });
+
+      if (
+        claimedSession &&
+        isSameRefreshClient(req, claimedSession) &&
+        isRecentRefreshUse(claimedSession, now)
+      ) {
+        return rotateRefreshSession(
+          req,
+          res,
+          claimedSession,
+          claimedSession.customer,
+          now,
+          StatusCodes.OK,
+        );
+      }
+
+      console.log(
+        "Refresh token race detected - session already rotated:",
+        session.session_id,
+      );
+
       if (session.family_id) {
         await prisma.customerSession.updateMany({
           where: {
@@ -180,84 +314,15 @@ const refreshToken = async (req, res, next) => {
     }
 
     const customer = session.customer;
-    const now = new Date();
 
-    // Atomically claim this refresh token: only succeeds if it's still
-    // unrevoked at the moment this runs. If two concurrent requests race
-    // here, only one of them will get count === 1 — the other gets 0 and
-    // is treated as reuse instead of both proceeding to create sessions.
-    const claim = await prisma.customerSession.updateMany({
-      where: {
-        session_id: session.session_id,
-        revoked: false,
-      },
-      data: {
-        revoked: true,
-        lastUsedAt: now,
-      },
-    });
-
-    if (claim.count === 0) {
-      // Lost the race — someone/something else already rotated this
-      // token a moment ago. Treat as reuse and lock the family.
-      console.log(
-        "Refresh token race detected — session already rotated:",
-        session.session_id,
-      );
-      if (session.family_id) {
-        await prisma.customerSession.updateMany({
-          where: {
-            family_id: session.family_id,
-            revoked: false,
-          },
-          data: {
-            revoked: true,
-          },
-        });
-      }
-
-      clearRefreshTokenCookie(res);
-      return res
-        .status(StatusCodes.UNAUTHORIZED)
-        .json({ message: "Refresh token reused / revoked" });
-    }
-
-    // Only the request that actually claimed the token gets here —
-    // safe to rotate: create new refresh token + session
-    const newRefreshTokenValue = generateRefreshToken();
-    const newRefreshTokenHash = hashRefreshToken(newRefreshTokenValue);
-
-    const newExpiresAt = new Date(
-      now.getTime() + REFRESH_TOKEN_EXPIRES_IN_DAYS * 24 * 60 * 60 * 1000,
+    return rotateRefreshSession(
+      req,
+      res,
+      session,
+      customer,
+      now,
+      StatusCodes.CREATED,
     );
-
-    // Create new rotated session
-    await prisma.customerSession.create({
-      data: {
-        customer_id: customer.customer_id,
-        refresh_token_hash: newRefreshTokenHash,
-        family_id: session.family_id,
-        user_agent: req.headers["user-agent"] || session.user_agent,
-        ip_address_hash: req.ip
-          ? hashRefreshToken(req.ip)
-          : session.ip_address_hash,
-        expiresAt: newExpiresAt,
-        lastUsedAt: now,
-      },
-    });
-
-    const newAccessToken = generateAccessToken(customer);
-    setRefreshTokenCookie(res, newRefreshTokenValue);
-
-    return res.status(StatusCodes.CREATED).json({
-      accessToken: newAccessToken,
-      user: {
-        id: customer.customer_id,
-        email: customer.email,
-        username: customer.username,
-        avatar: customer.avatar,
-      },
-    });
   } catch (error) {
     console.log("refresh token error", error);
     next(error);
