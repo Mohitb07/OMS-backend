@@ -20,6 +20,9 @@ const productRoutes = require("./routes/productRoutes");
 const cartRoutes = require("./routes/cartRoutes");
 const orderRoutes = require("./routes/orderRoutes");
 const addressRoutes = require("./routes/addressRoutes");
+const adminAuthRoutes = require("./routes/adminAuthRoutes");
+const adminProductRoutes = require("./routes/adminProductRoutes");
+const adminUserRoutes = require("./routes/adminUserRoutes");
 const corsConfig = require("./config/corsConfig");
 const errorHandler = require("./middleware/globalErrorHandler");
 
@@ -42,11 +45,15 @@ app.use(cookieParser());
 
 
 app.use("/auth", authRoutes);
+app.use("/admin/auth", adminAuthRoutes);
+app.use("/admin", adminProductRoutes);
+app.use("/admin", adminUserRoutes);
 app.use(userRoutes);
 app.use(productRoutes);
 app.use(cartRoutes);
 app.use(orderRoutes);
 app.use(addressRoutes);
+
 app.use("/api/healthcheck", (req, res) => {
   res.status(StatusCodes.OK).json({ message: "Server is running" });
 });
