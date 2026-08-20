@@ -161,3 +161,27 @@ enum payment_method {
   cash
   card
 }
+
+model Admin {
+  admin_id               String     @id @default(cuid())
+  username               String     @db.VarChar(255)
+  email                  String     @unique(map: "admin_email") @db.VarChar(255)
+  password               String     @db.VarChar(255)
+  role                   admin_role @default(ADMIN)
+  isVerified             Boolean    @default(false)
+  verificationToken      String?    @db.VarChar(255)
+  verificationExpires    DateTime?
+  lastVerificationSentAt DateTime?
+  resetPasswordToken     String?    @db.VarChar(255)
+  resetPasswordExpires   DateTime?
+  createdAt              DateTime   @default(now())
+  updatedAt              DateTime   @updatedAt
+
+  @@map("admin")
+}
+
+enum admin_role {
+  ADMIN
+  SUPERADMIN
+}
+
