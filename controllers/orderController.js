@@ -3,6 +3,7 @@ const prisma = require("../prismaClient");
 const crypto = require("crypto");
 const { StatusCodes } = require("http-status-codes");
 const { calculateCartPrice } = require("../services/calculateCartPrice");
+const { sendOrderConfirmationEmail } = require("../services/emailService");
 const BadRequestError = require("../errors/BadRequestError");
 const NotFoundError = require("../errors/NotFoundError");
 const ValidationError = require("../errors/ValidationError");
@@ -145,6 +146,38 @@ const cashTransaction = async (req, res, next) => {
       });
     });
     console.log("order placed successfully");
+
+    // Asynchronously send order confirmation email
+    (async () => {
+      try {
+        const orderDetails = await prisma.order.findUnique({
+          where: { order_id: orderId },
+          include: {
+            customer: true,
+            address: true,
+            order_items: {
+              include: { product: true },
+            },
+          },
+        });
+
+        if (orderDetails && orderDetails.customer?.email) {
+          await sendOrderConfirmationEmail({
+            toEmail: orderDetails.customer.email,
+            customerName:
+              orderDetails.address?.full_name || orderDetails.customer.username,
+            order: orderDetails,
+            orderItems: orderDetails.order_items,
+            address: orderDetails.address,
+            paymentMethod: "cash",
+            orderUrl: `${process.env.CLIENT_URL || "https://wondrmart.vercel.app"}/order/${orderId}`,
+          });
+        }
+      } catch (emailErr) {
+        console.error("Error sending order confirmation email (cash):", emailErr);
+      }
+    })();
+
     return res.status(StatusCodes.OK).json({
       message: "Order placed successfully",
       sendTo: `order/${orderId}`,
@@ -253,8 +286,47 @@ const handlePaymentResponse = async (req, res) => {
             },
           });
         })
-        .then(() => {
+        .then(async () => {
           console.log("order placed successfully");
+
+          // Asynchronously send order confirmation email
+          (async () => {
+            try {
+              const orderDetails = await prisma.order.findUnique({
+                where: { order_id: orderId },
+                include: {
+                  customer: true,
+                  address: true,
+                  order_items: {
+                    include: { product: true },
+                  },
+                },
+              });
+
+              if (orderDetails) {
+                const recipientEmail = email || orderDetails.customer?.email;
+                const customerName =
+                  firstname ||
+                  orderDetails.address?.full_name ||
+                  orderDetails.customer?.username;
+
+                if (recipientEmail) {
+                  await sendOrderConfirmationEmail({
+                    toEmail: recipientEmail,
+                    customerName,
+                    order: orderDetails,
+                    orderItems: orderDetails.order_items,
+                    address: orderDetails.address,
+                    paymentMethod: "card",
+                    orderUrl: `${process.env.CLIENT_URL || "https://wondrmart.vercel.app"}/order/${orderId}`,
+                  });
+                }
+              }
+            } catch (emailErr) {
+              console.error("Error sending order confirmation email (card):", emailErr);
+            }
+          })();
+
           res.redirect(`${process.env.CLIENT_URL}/order/${orderId}`);
         })
         .catch((error) => {
