@@ -257,8 +257,9 @@ const handlePaymentResponse = async (req, res) => {
     req.body;
   const params = { txnid, amount, productinfo, firstname, email };
   const generatedHash = verifyPaymentHash(params, status);
-  const orderId = productinfo.split(",")[0];
-  const cartId = productinfo.split(",")[1];
+  const infoParts = productinfo ? productinfo.trim().split(/[\s,]+/) : [];
+  const orderId = infoParts[0] || "";
+  const cartId = infoParts[1] || "";
 
   if (generatedHash === hash) {
     if (status === "success") {
@@ -280,11 +281,18 @@ const handlePaymentResponse = async (req, res) => {
               order_id: orderId,
             },
           });
-          await transaction.cartItem.deleteMany({
-            where: {
-              cart_id: cartId,
-            },
-          });
+          if (cartId) {
+            await transaction.cartItem.deleteMany({
+              where: {
+                cart_id: cartId,
+              },
+            });
+            await transaction.cart.deleteMany({
+              where: {
+                cart_id: cartId,
+              },
+            });
+          }
         })
         .then(async () => {
           console.log("order placed successfully");
