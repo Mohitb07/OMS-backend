@@ -9,6 +9,7 @@ const NotFoundError = require("../errors/NotFoundError");
 const ValidationError = require("../errors/ValidationError");
 const ForbiddenError = require("../errors/ForbiddenError");
 const { validationResult } = require("express-validator");
+const { generateOrderInvoicePDF } = require("../services/invoiceService");
 
 const PAYU_BASE_URL = process.env.PAYU_BASE_URL; // Use 'https://secure.payu.in' for production
 const MERCHANT_KEY = process.env.MERCHANT_KEY;
@@ -49,57 +50,58 @@ const getUserCart = async (customer_id) => {
   }
 };
 
+/**
+ * Creates an Order and its OrderItems inside the given transaction (or a new
+ * one if none is provided).
+ *
+ * @param {string}  payment_method
+ * @param {string}  address_id
+ * @param {string}  customer_id
+ * @param {string}  cart_id       - Used by callers to clear the cart in the same tx.
+ * @param {object}  [tx]          - Optional Prisma transaction client. When provided,
+ *                                  the writes join the caller's transaction so the entire
+ *                                  order + cart-clear is one atomic operation.
+ */
 const createUserOrder = async (
   payment_method,
   address_id,
   customer_id,
-  cart_id
+  cart_id,
+  tx
 ) => {
-  let order;
-  let userCart;
+  const db = tx || prisma; // use the caller's transaction if provided
   try {
-    await prisma.$transaction(async (transaction) => {
-      userCart = await getUserCart(customer_id);
-      const cartItems = userCart.cart_items;
-      order = await transaction.order.create({
-        data: {
-          payment_method,
-          order_amount: calculateCartPrice(cartItems),
-          status: "pending",
-          customer: {
-            connect: {
-              customer_id,
-            },
-          },
-          address: {
-            connect: {
-              address_id,
-            },
-          },
-        },
-      });
+    const userCart = await getUserCart(customer_id);
+    const cartItems = userCart.cart_items;
 
-      await transaction.orderItem.createMany({
-        data: cartItems.map((cartItem) => ({
-          order_id: order.order_id,
-          product_id: cartItem.product_id,
-          quantity: cartItem.quantity,
-          total_amount: cartItem.total_amount,
-        })),
-      });
+    const order = await db.order.create({
+      data: {
+        payment_method,
+        order_amount: calculateCartPrice(cartItems),
+        status: "pending",
+        customer: { connect: { customer_id } },
+        address: { connect: { address_id } },
+      },
     });
-    return {
-      order,
-      userCart,
-    };
+
+    await db.orderItem.createMany({
+      data: cartItems.map((cartItem) => ({
+        order_id: order.order_id,
+        product_id: cartItem.product_id,
+        quantity: cartItem.quantity,
+        total_amount: cartItem.total_amount,
+      })),
+    });
+
+    return { order, userCart };
   } catch (error) {
-    console.error("Order creation transaction failed:", error);
+    console.error("Order creation failed:", error);
     throw error;
   }
 };
 
 const cashTransaction = async (req, res, next) => {
-  const { cart_id, address_id, payment_method } = req.body;     
+  const { cart_id, address_id, payment_method } = req.body;
   const { id: customer_id } = req.user;
 
   const errors = validationResult(req);
@@ -113,41 +115,45 @@ const cashTransaction = async (req, res, next) => {
   if (payment_method !== "cash") {
     throw new BadRequestError("Invalid payment method");
   }
-  let orderId = null;              
+
+  let orderId = null;
   try {
-    const { order, userCart } = await createUserOrder(
-      payment_method,
-      address_id  ,
-      customer_id,
-      cart_id
-    );
-    orderId = order.order_id;
-    const cartItems = userCart.cart_items;
-    await prisma.$transaction(async (transaction) => {
-      await transaction.order.update({
-        data: {
-          status: "processing",
-        },
+    // Single atomic transaction covering order creation, order items,
+    // status update and cart clearing. This eliminates the double-order
+    // gap that existed when two separate transactions were used:
+    // if anything fails the entire operation is rolled back.
+    await prisma.$transaction(async (tx) => {
+      const { order, userCart } = await createUserOrder(
+        payment_method,
+        address_id,
+        customer_id,
+        cart_id,
+        tx // pass the outer transaction so all writes are atomic
+      );
+
+      orderId = order.order_id;
+      const cartItems = userCart.cart_items;
+
+      // Move order to processing and clear cart atomically
+      await tx.order.update({
+        data: { status: "processing" },
+        where: { order_id: orderId },
+      });
+
+      await tx.cartItem.deleteMany({
         where: {
-          order_id: orderId,
+          cart_item_id: { in: cartItems.map((item) => item.cart_item_id) },
         },
       });
-      await transaction.cartItem.deleteMany({
-        where: {
-          cart_item_id: {
-            in: cartItems.map((cartItem) => cartItem.cart_item_id),
-          },
-        },
-      });
-      await transaction.cart.delete({
-        where: {
-          cart_id,
-        },
-      });
+
+      await tx.cart.delete({ where: { cart_id } });
     });
+
     console.log("order placed successfully");
 
-    // Asynchronously send order confirmation email
+    // Send confirmation email asynchronously (outside the transaction).
+    // Email is a non-transactional side-effect; failures are logged but
+    // must not roll back the committed order.
     (async () => {
       try {
         const orderDetails = await prisma.order.findUnique({
@@ -155,9 +161,7 @@ const cashTransaction = async (req, res, next) => {
           include: {
             customer: true,
             address: true,
-            order_items: {
-              include: { product: true },
-            },
+            order_items: { include: { product: true } },
           },
         });
 
@@ -170,7 +174,7 @@ const cashTransaction = async (req, res, next) => {
             orderItems: orderDetails.order_items,
             address: orderDetails.address,
             paymentMethod: "cash",
-            orderUrl: `${process.env.CLIENT_URL || "https://wondrmart.vercel.app"}/order/${orderId}`,
+            orderUrl: `${process.env.CLIENT_URL || "https://wondrmart.vercel.app"}/user/${orderDetails.customer_id}/orders/${orderId}`,
           });
         }
       } catch (emailErr) {
@@ -183,11 +187,8 @@ const cashTransaction = async (req, res, next) => {
       sendTo: `order/${orderId}`,
     });
   } catch (error) {
-    console.log("error while placing order", error);
-    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
-      message: "Error while placing order",
-      sendTo: `order/${orderId}`,
-    });
+    console.error("Error while placing cash order:", error);
+    next(error);
   }
 };
 
@@ -261,103 +262,92 @@ const handlePaymentResponse = async (req, res) => {
   const orderId = infoParts[0] || "";
   const cartId = infoParts[1] || "";
 
-  if (generatedHash === hash) {
-    if (status === "success") {
-      prisma
-        .$transaction(async (transaction) => {
-          const order = await transaction.order.findUnique({
-            where: {
-              order_id: orderId,
-            },
-          });
-          if (!order) {
-            throw new NotFoundError(`Order with id ${orderId} not found`);
-          }
-          await transaction.order.update({
-            data: {
-              status: "processing",
-            },
-            where: {
-              order_id: orderId,
-            },
-          });
-          if (cartId) {
-            await transaction.cartItem.deleteMany({
-              where: {
-                cart_id: cartId,
-              },
-            });
-            await transaction.cart.deleteMany({
-              where: {
-                cart_id: cartId,
-              },
-            });
-          }
-        })
-        .then(async () => {
-          console.log("order placed successfully");
-
-          // Asynchronously send order confirmation email
-          (async () => {
-            try {
-              const orderDetails = await prisma.order.findUnique({
-                where: { order_id: orderId },
-                include: {
-                  customer: true,
-                  address: true,
-                  order_items: {
-                    include: { product: true },
-                  },
-                },
-              });
-
-              if (orderDetails) {
-                const recipientEmail = email || orderDetails.customer?.email;
-                const customerName =
-                  firstname ||
-                  orderDetails.address?.full_name ||
-                  orderDetails.customer?.username;
-
-                if (recipientEmail) {
-                  await sendOrderConfirmationEmail({
-                    toEmail: recipientEmail,
-                    customerName,
-                    order: orderDetails,
-                    orderItems: orderDetails.order_items,
-                    address: orderDetails.address,
-                    paymentMethod: "card",
-                    orderUrl: `${process.env.CLIENT_URL || "https://wondrmart.vercel.app"}/order/${orderId}`,
-                  });
-                }
-              }
-            } catch (emailErr) {
-              console.error("Error sending order confirmation email (card):", emailErr);
-            }
-          })();
-
-          res.redirect(`${process.env.CLIENT_URL}/order/${orderId}`);
-        })
-        .catch((error) => {
-          console.error("Error while updating order status", error);
-          res.redirect(`${process.env.CLIENT_URL}/order/${orderId}`);
-        });
-    } else {
-      try {
-        await prisma.order.delete({
-          where: {
-            order_id: orderId,
-          },
-        });
-        res.redirect(`${process.env.CLIENT_URL}/order/${orderId}`);
-      } catch (error) {
-        console.error("Error while updating order status", error);
-        res.redirect(`${process.env.CLIENT_URL}/order/${orderId}`);
-      }
-    }
-  } else {
+  if (generatedHash !== hash) {
     throw new ValidationError("Invalid payment hash", [
       { message: "Invalid payment hash", property: "hash" },
     ]);
+  }
+
+  if (status === "success") {
+    try {
+      // Await the transaction so errors are caught and don't silently redirect
+      await prisma.$transaction(async (transaction) => {
+        const order = await transaction.order.findUnique({
+          where: { order_id: orderId },
+        });
+        if (!order) {
+          throw new NotFoundError(`Order with id ${orderId} not found`);
+        }
+        await transaction.order.update({
+          data: { status: "processing" },
+          where: { order_id: orderId },
+        });
+        if (cartId) {
+          await transaction.cartItem.deleteMany({
+            where: { cart_id: cartId },
+          });
+          await transaction.cart.deleteMany({
+            where: { cart_id: cartId },
+          });
+        }
+      });
+
+      console.log("order placed successfully");
+
+      // Send confirmation email asynchronously (outside the transaction)
+      (async () => {
+        try {
+          const orderDetails = await prisma.order.findUnique({
+            where: { order_id: orderId },
+            include: {
+              customer: true,
+              address: true,
+              order_items: { include: { product: true } },
+            },
+          });
+
+          if (orderDetails) {
+            const recipientEmail = email || orderDetails.customer?.email;
+            const customerName =
+              firstname ||
+              orderDetails.address?.full_name ||
+              orderDetails.customer?.username;
+
+            if (recipientEmail) {
+              await sendOrderConfirmationEmail({
+                toEmail: recipientEmail,
+                customerName,
+                order: orderDetails,
+                orderItems: orderDetails.order_items,
+                address: orderDetails.address,
+                paymentMethod: "card",
+                orderUrl: `${process.env.CLIENT_URL || "https://wondrmart.vercel.app"}/user/${orderDetails.customer_id}/orders/${orderId}`,
+              });
+            }
+          }
+        } catch (emailErr) {
+          console.error("Error sending order confirmation email (card):", emailErr);
+        }
+      })();
+
+      res.redirect(`${process.env.CLIENT_URL}/order/${orderId}`);
+    } catch (error) {
+      console.error("Error while updating order status (payment success):", error);
+      res.redirect(`${process.env.CLIENT_URL}/order/${orderId}`);
+    }
+  } else {
+    // Payment failed — mark the order as cancelled so the verification route
+    // accurately displays the cancellation / refund state without deleting DB history.
+    try {
+      await prisma.order.update({
+        where: { order_id: orderId },
+        data: { status: "cancelled" },
+      });
+      res.redirect(`${process.env.CLIENT_URL}/order/${orderId}`);
+    } catch (error) {
+      console.error("Error while updating failed order status:", error);
+      res.redirect(`${process.env.CLIENT_URL}/order/${orderId}`);
+    }
   }
 };
 
@@ -378,18 +368,30 @@ const validateUserOrder = async (req, res, next) => {
       where: {
         order_id: orderId,
       },
+      include: {
+        customer: {
+          select: {
+            email: true,
+            username: true,
+          },
+        },
+        address: true,
+        order_items: {
+          include: {
+            product: true,
+          },
+        },
+      },
     });
 
     if (!order) {
-      return res.status(StatusCodes.OK).json({ status: "cancelled" });
+      throw new NotFoundError(`Order with id ${orderId} not found`);
     }
 
     if (order.customer_id !== customer_id) {
       throw new ForbiddenError("You are not authorized to view this order");
     }
-    return res.status(StatusCodes.OK).send({
-      status: order.status,
-    });
+    return res.status(StatusCodes.OK).json(order);
   } catch (error) {
     next(error);
   }
@@ -513,6 +515,54 @@ const getOrdersCount = async (req, res, next) => {
   }
 };
 
+const downloadInvoice = async (req, res, next) => {
+  const { orderId } = req.params;
+  const { id: customer_id } = req.user;
+
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const result = errors.formatWith(({ msg, param }) => {
+      return { message: msg, property: param };
+    });
+    throw new ValidationError("Incorrect data", result.array());
+  }
+
+  try {
+    const order = await prisma.order.findUnique({
+      where: {
+        order_id: orderId,
+      },
+      include: {
+        customer: true,
+        address: true,
+        order_items: {
+          include: {
+            product: true,
+          },
+        },
+      },
+    });
+
+    if (!order) {
+      throw new NotFoundError(`Order with id ${orderId} not found`);
+    }
+
+    if (order.customer_id !== customer_id) {
+      throw new ForbiddenError("You are not authorized to view this invoice");
+    }
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `inline; filename="invoice-${orderId}.pdf"`
+    );
+
+    await generateOrderInvoicePDF(order, res);
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getOrder,
   getOrders,
@@ -521,4 +571,5 @@ module.exports = {
   handlePaymentResponse,
   cashTransaction,
   validateUserOrder,
+  downloadInvoice,
 };

@@ -37,6 +37,7 @@
     "morgan": "^1.10.0",
     "mysql2": "^3.2.0",
     "nodemailer": "^9.0.5",
+    "pdfkit": "^0.20.1",
     "prisma": "4.12.0",
     "resend": "^6.20.0",
     "sanitize-html": "^2.11.0",

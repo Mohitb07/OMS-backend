@@ -15,6 +15,12 @@ router.get(
   orderController.getOrder
 );
 router.get(
+  "/order/:orderId/invoice",
+  [param("orderId").isString().withMessage("Order ID must be a string")],
+  auth,
+  orderController.downloadInvoice
+);
+router.get(
   "/verify_order/:orderId",
   [param("orderId").isString().withMessage("Order ID must be a string")],
   auth,
