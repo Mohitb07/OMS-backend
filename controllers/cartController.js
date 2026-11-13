@@ -62,65 +62,58 @@ const addToCart = async (req, res, next) => {
   }
 
   try {
+    // Validate user and product exist before starting the transaction
     const user = await prisma.customer.findUnique({
-      where: {
-        customer_id: id,
-      },
+      where: { customer_id: id },
     });
     if (!user) {
       throw new NotFoundError("User does not exist");
     }
     const product = await prisma.product.findUnique({
-      where: {
-        product_id,
-      },
+      where: { product_id },
     });
     if (!product) {
       throw new NotFoundError(`Product with id ${product_id} not found`);
     }
 
-    let cart = await prisma.cart.findFirst({
-      where: {
-        customer_id: id,
-        status: "active",
-      },
+    // Wrap cart find/create + cartItem upsert in a single transaction.
+    // Without this, two concurrent "add to cart" requests from the same user
+    // could both see no active cart and both try to create one — violating
+    // the @unique constraint on Cart.customer_id and causing a 500 error.
+    const cartItem = await prisma.$transaction(async (tx) => {
+      // Find or create the active cart
+      let cart = await tx.cart.findFirst({
+        where: { customer_id: id, status: "active" },
+      });
+
+      if (!cart) {
+        cart = await tx.cart.create({
+          data: { customer_id: id, status: "active" },
+        });
+      }
+
+      // Upsert the cart item — increment if already present, create if new
+      const existingItem = await tx.cartItem.findFirst({
+        where: { cart_id: cart.cart_id, product_id },
+      });
+
+      if (!existingItem) {
+        return tx.cartItem.create({
+          data: {
+            quantity: 1,
+            total_amount: product.price,
+            cart_id: cart.cart_id,
+            product_id,
+          },
+        });
+      } else {
+        return tx.cartItem.update({
+          where: { cart_item_id: existingItem.cart_item_id },
+          data: { quantity: existingItem.quantity + 1 },
+        });
+      }
     });
 
-    if (!cart) {
-      cart = await prisma.cart.create({
-        data: {
-          customer_id: id,
-          status: "active",
-        },
-      });
-    }
-
-    const productInCart = await prisma.cartItem.findFirst({
-      where: {
-        cart_id: cart.cart_id,
-        product_id,
-      },
-    });
-    let cartItem;
-    if (!productInCart) {
-      cartItem = await prisma.cartItem.create({
-        data: {
-          quantity: 1,
-          total_amount: product.price,
-          cart_id: cart.cart_id,
-          product_id,
-        },
-      });
-    } else {
-      cartItem = await prisma.cartItem.update({
-        where: {
-          cart_item_id: productInCart.cart_item_id,
-        },
-        data: {
-          quantity: productInCart.quantity + 1,
-        },
-      });
-    }
     return res.status(StatusCodes.CREATED).send({ cartItem });
   } catch (error) {
     console.log("ERROR ON ADD TO CART", error);
@@ -156,27 +149,28 @@ const updateCartQuantity = async (req, res, next) => {
     }
 
     if (Number(quantity) === 0) {
-      await prisma.cartItem.delete({
-        where: {
-          cart_item_id: cartItem.cart_item_id,
-        },
-      });
+      // Wrap the item delete + potential cart delete in a single transaction.
+      // Without this, a crash after cartItem.delete but before cart.delete
+      // leaves an orphan Cart row. Since Cart.customer_id is @unique, the
+      // user would be permanently blocked from creating a new cart.
       const remainingItemsCount = await prisma.cartItem.count({
-        where: {
-          cart_id,
-        },
+        where: { cart_id, NOT: { cart_item_id: cartItem.cart_item_id } },
       });
-      if (remainingItemsCount === 0) {
-        await prisma.cart.delete({
-          where: {
-            cart_id,
-          },
+
+      await prisma.$transaction(async (tx) => {
+        await tx.cartItem.delete({
+          where: { cart_item_id: cartItem.cart_item_id },
         });
-      }
+        if (remainingItemsCount === 0) {
+          await tx.cart.delete({ where: { cart_id } });
+        }
+      });
+
       return res
         .status(StatusCodes.OK)
         .json({ message: "Cart item removed successfully" });
     }
+
     const updatedCartItem = await prisma.cartItem.update({
       where: {
         cart_item_id: cartItem.cart_item_id,
@@ -189,7 +183,7 @@ const updateCartQuantity = async (req, res, next) => {
 
     return res.status(StatusCodes.OK).json(updatedCartItem);
   } catch (error) {
-    console.log("ERROR ON ADD TO CART", error);
+    console.log("ERROR ON UPDATE CART QUANTITY", error);
     next(error);
   }
 };
@@ -207,30 +201,28 @@ const deleteCartItem = async (req, res, next) => {
     }
 
     const cartItem = await prisma.cartItem.findUnique({
-      where: {
-        cart_item_id,
-      },
+      where: { cart_item_id },
     });
     if (!cartItem) {
       throw new NotFoundError("Cart item not found");
     }
-    await prisma.cartItem.delete({
-      where: {
-        cart_item_id,
-      },
-    });
+
+    // Check remaining items before entering the transaction so we can make
+    // the cart-delete conditional without a nested count inside the tx.
     const remainingItems = await prisma.cartItem.count({
-      where: {
-        cart_id,
-      },
+      where: { cart_id, NOT: { cart_item_id } },
     });
-    if (remainingItems === 0) {
-      await prisma.cart.delete({
-        where: {
-          cart_id,
-        },
-      });
-    }
+
+    // Atomically delete the item and — if it was the last one — the cart too.
+    // Without a transaction an orphan Cart row would block the user from ever
+    // creating a new cart (Cart.customer_id is @unique).
+    await prisma.$transaction(async (tx) => {
+      await tx.cartItem.delete({ where: { cart_item_id } });
+      if (remainingItems === 0) {
+        await tx.cart.delete({ where: { cart_id } });
+      }
+    });
+
     return res.status(StatusCodes.OK).json({ message: "Cart item removed" });
   } catch (error) {
     next(error);
