@@ -56,12 +56,18 @@ const register = async (req, res, next) => {
   const clientUrl = process.env.CLIENT_URL || "http://localhost:3000";
   const verificationUrl = `${clientUrl}/admin/verify-email?token=${rawToken}&email=${encodeURIComponent(admin.email)}`;
 
-  // Send verification email via Nodemailer
-  await sendAdminVerificationEmail({
-    toEmail: admin.email,
-    verificationUrl,
-    adminName: admin.username,
-  });
+  // Send verification email — wrapped in try/catch so an SMTP failure does
+  // not surface as a 500. The admin record is already committed; they can
+  // use the resend-verification endpoint if the email didn't arrive.
+  try {
+    await sendAdminVerificationEmail({
+      toEmail: admin.email,
+      verificationUrl,
+      adminName: admin.username,
+    });
+  } catch (emailErr) {
+    console.error("[adminAuth] Failed to send verification email on register:", emailErr);
+  }
 
   return res.status(StatusCodes.CREATED).json({
     message: "Registration successful! Please check your email to verify and activate your account.",
@@ -164,11 +170,17 @@ const resendVerificationEmail = async (req, res, next) => {
   const clientUrl = process.env.CLIENT_URL || "http://localhost:3000";
   const verificationUrl = `${clientUrl}/admin/verify-email?token=${rawToken}&email=${encodeURIComponent(admin.email)}`;
 
-  await sendAdminVerificationEmail({
-    toEmail: admin.email,
-    verificationUrl,
-    adminName: admin.username,
-  });
+  // Wrapped in try/catch — DB token is already committed so the admin can
+  // request another resend. A transient SMTP failure must not return a 500.
+  try {
+    await sendAdminVerificationEmail({
+      toEmail: admin.email,
+      verificationUrl,
+      adminName: admin.username,
+    });
+  } catch (emailErr) {
+    console.error("[adminAuth] Failed to send verification email on resend:", emailErr);
+  }
 
   return res.status(StatusCodes.OK).json({
     message: "If an unverified account with that email exists, a verification link has been sent.",
@@ -289,11 +301,17 @@ const forgotPassword = async (req, res, next) => {
   const clientUrl = process.env.CLIENT_URL || "http://localhost:3000";
   const resetUrl = `${clientUrl}/admin/reset-password?token=${rawToken}&email=${encodeURIComponent(admin.email)}`;
 
-  await sendAdminPasswordResetEmail({
-    toEmail: admin.email,
-    resetUrl,
-    adminName: admin.username,
-  });
+  // Wrapped in try/catch — the reset token is already saved to the DB.
+  // An SMTP failure must not return a 500; the admin can re-request the link.
+  try {
+    await sendAdminPasswordResetEmail({
+      toEmail: admin.email,
+      resetUrl,
+      adminName: admin.username,
+    });
+  } catch (emailErr) {
+    console.error("[adminAuth] Failed to send password reset email:", emailErr);
+  }
 
   return res.status(StatusCodes.OK).json({
     message: "If an account with that email exists, a password reset link has been sent.",
