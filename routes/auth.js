@@ -47,4 +47,37 @@ router.post("/logout", authController.logout);
 
 router.post("/logout_all", auth, authController.logoutAll);
 
+// Verify email with OTP (sent on registration)
+router.post(
+  "/verify-otp",
+  [
+    body("email")
+      .notEmpty()
+      .withMessage("Email is required")
+      .isEmail()
+      .withMessage("Invalid email address"),
+    body("otp")
+      .notEmpty()
+      .withMessage("OTP is required")
+      .isLength({ min: 6, max: 6 })
+      .withMessage("OTP must be exactly 6 digits")
+      .isNumeric()
+      .withMessage("OTP must contain digits only"),
+  ],
+  authController.verifyOtp
+);
+
+// Resend verification OTP (60-second cooldown enforced server-side)
+router.post(
+  "/resend-otp",
+  [
+    body("email")
+      .notEmpty()
+      .withMessage("Email is required")
+      .isEmail()
+      .withMessage("Invalid email address"),
+  ],
+  authController.resendOtp
+);
+
 module.exports = router;

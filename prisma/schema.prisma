@@ -39,20 +39,25 @@ model Cart {
 }
 
 model Customer {
-  customer_id String            @id @default(cuid())
-  username    String            @db.VarChar(255)
-  email       String            @unique(map: "email") @db.VarChar(255)
-  password    String            @db.VarChar(255)
-  avatar      String            @default("") @db.VarChar(1000)
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
-  orders      Order[]
-  cart        Cart?
-  addresses   CustomerAddress[]
-  sessions    CustomerSession[]
+  customer_id               String            @id @default(cuid())
+  username                  String            @db.VarChar(255)
+  email                     String            @unique(map: "email") @db.VarChar(255)
+  password                  String            @db.VarChar(255)
+  avatar                    String            @default("") @db.VarChar(1000)
+  isVerified                Boolean           @default(false)
+  verificationOtpHash       String?           @db.VarChar(255)
+  verificationOtpExpires    DateTime?
+  lastVerificationOtpSentAt DateTime?
+  createdAt                 DateTime          @default(now())
+  updatedAt                 DateTime          @updatedAt
+  orders                    Order[]
+  cart                      Cart?
+  addresses                 CustomerAddress[]
+  sessions                  CustomerSession[]
 
   @@map("customer")
 }
+
 
 model CustomerSession {
   session_id         String    @id @default(cuid())

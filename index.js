@@ -78,6 +78,39 @@ app.listen(PORT, async () => {
   }
 });
 
+/**
+ * Cleanup Job: Delete unverified customer accounts older than 24 hours.
+ *
+ * Unverified accounts are created when a user registers but never completes
+ * OTP verification. Left unchecked they accumulate and can be used to squat
+ * on email addresses. This job runs every hour and purges stale records.
+ *
+ * Safe to re-register with the same email after cleanup.
+ */
+const UNVERIFIED_ACCOUNT_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const CLEANUP_INTERVAL_MS = 60 * 60 * 1000; // run every 1 hour
+
+async function cleanupUnverifiedCustomers() {
+  const cutoff = new Date(Date.now() - UNVERIFIED_ACCOUNT_TTL_MS);
+  try {
+    const result = await prisma.customer.deleteMany({
+      where: {
+        isVerified: false,
+        createdAt: { lt: cutoff },
+      },
+    });
+    if (result.count > 0) {
+      console.log(`[cleanup] Deleted ${result.count} unverified customer account(s) older than 24h.`);
+    }
+  } catch (err) {
+    console.error("[cleanup] Failed to clean up unverified customers:", err);
+  }
+}
+
+// Run once on startup, then every hour
+cleanupUnverifiedCustomers();
+setInterval(cleanupUnverifiedCustomers, CLEANUP_INTERVAL_MS);
+
 // Handle unhandled promise rejections
 process.on("unhandledRejection", (reason, promise) => {
   console.error("Unhandled Rejection at:", promise, "reason:", reason);

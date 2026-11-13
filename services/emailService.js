@@ -600,10 +600,174 @@ const sendOrderConfirmationEmail = async ({
     return { success: false, error: err };
   }
 };
+/**
+ * Sends an OTP verification email to a newly registered customer.
+ * @param {Object} params
+ * @param {string} params.toEmail   - Recipient email address
+ * @param {string} params.otp       - The plaintext 6-digit OTP (never stored as-is in the DB)
+ * @param {string} [params.username] - Customer's username for personalisation
+ */
+const sendCustomerOtpEmail = async ({ toEmail, otp, username }) => {
+  const transporter = createTransporter();
+  const fromEmail = process.env.EMAIL_FROM || `"Wondrmart" <${process.env.EMAIL_USER}>`;
+  const name = username || "there";
+
+  // Build individual OTP digit boxes for visual clarity
+  const otpDigits = otp
+    .split("")
+    .map(
+      (d) =>
+        `<span style="display:inline-block;width:44px;height:52px;line-height:52px;text-align:center;font-size:28px;font-weight:700;border:2px solid #e2e8f0;border-radius:10px;margin:0 4px;color:#1a202c;background:#f7fafc;">${d}</span>`
+    )
+    .join("");
+
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Verify Your Email — Wondrmart</title>
+      <style>
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+          background-color: #f4f5f7;
+          margin: 0;
+          padding: 0;
+          color: #1a202c;
+        }
+        .container {
+          max-width: 520px;
+          margin: 40px auto;
+          background: #ffffff;
+          border-radius: 16px;
+          overflow: hidden;
+          box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+        }
+        .header {
+          background: linear-gradient(135deg, #6c63ff 0%, #4f46e5 100%);
+          padding: 36px 40px 28px;
+          text-align: center;
+        }
+        .header h1 {
+          margin: 0;
+          color: #ffffff;
+          font-size: 22px;
+          font-weight: 700;
+          letter-spacing: -0.3px;
+        }
+        .header p {
+          margin: 6px 0 0;
+          color: rgba(255,255,255,0.85);
+          font-size: 14px;
+        }
+        .body {
+          padding: 36px 40px;
+        }
+        .greeting {
+          font-size: 16px;
+          color: #4a5568;
+          margin: 0 0 20px;
+        }
+        .otp-label {
+          font-size: 13px;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+          color: #718096;
+          margin-bottom: 14px;
+          text-align: center;
+        }
+        .otp-box {
+          text-align: center;
+          margin: 0 0 24px;
+        }
+        .expiry-notice {
+          background: #fff8e1;
+          border-left: 4px solid #f6ad55;
+          border-radius: 6px;
+          padding: 12px 16px;
+          font-size: 13px;
+          color: #744210;
+          margin-bottom: 20px;
+        }
+        .security-note {
+          font-size: 12px;
+          color: #a0aec0;
+          text-align: center;
+          margin: 0 0 16px;
+        }
+        .divider {
+          border: none;
+          border-top: 1px solid #e2e8f0;
+          margin: 24px 0;
+        }
+        .footer {
+          padding: 0 40px 32px;
+          text-align: center;
+        }
+        .footer p {
+          font-size: 12px;
+          color: #a0aec0;
+          margin: 0;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1>Verify Your Email</h1>
+          <p>One quick step to activate your Wondrmart account</p>
+        </div>
+        <div class="body">
+          <p class="greeting">Hi <strong>${name}</strong>,</p>
+          <p style="font-size:15px;color:#4a5568;margin:0 0 24px;">
+            Thanks for signing up! Use the verification code below to confirm your email address and complete your registration.
+          </p>
+          <p class="otp-label">Your verification code</p>
+          <div class="otp-box">
+            ${otpDigits}
+          </div>
+          <div class="expiry-notice">
+            ⏱ This code expires in <strong>10 minutes</strong>. If it expires, you can request a new one from the verification screen.
+          </div>
+          <p class="security-note">
+            🔒 Never share this code with anyone. Wondrmart will never ask for your OTP over call or chat.
+          </p>
+          <hr class="divider">
+          <p style="font-size:13px;color:#718096;text-align:center;margin:0;">
+            Didn't create an account? You can safely ignore this email.
+          </p>
+        </div>
+        <div class="footer">
+          <p>© ${new Date().getFullYear()} Wondrmart. All rights reserved.</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  const mailOptions = {
+    from: fromEmail,
+    to: toEmail,
+    subject: `${otp} is your Wondrmart verification code`,
+    html: htmlContent,
+    text: `Hi ${name},\n\nYour Wondrmart verification code is: ${otp}\n\nThis code expires in 10 minutes.\n\nIf you did not create an account, please ignore this email.`,
+  };
+
+  try {
+    const info = await transporter.sendMail(mailOptions);
+    return { success: true, data: info };
+  } catch (err) {
+    console.error("[emailService] Failed to send customer OTP email:", err);
+    return { success: false, error: err };
+  }
+};
 
 module.exports = {
   createTransporter,
   sendAdminPasswordResetEmail,
   sendAdminVerificationEmail,
   sendOrderConfirmationEmail,
+  sendCustomerOtpEmail,
 };
