@@ -127,18 +127,23 @@ const updateProduct = async (req, res, next) => {
   if (description !== undefined) updateData.description = DOMPurify.sanitize(description);
   if (price !== undefined) updateData.price = parseFloat(price);
 
+  // Determine if the image needs to change. We upload the new image first
+  // (so we have the new URL before touching the DB), but we only delete the
+  // old image AFTER the DB update succeeds. This way, if the DB write fails,
+  // the old image is still intact and referenced correctly.
+  let newImageUrl;
+  let oldImagePublicId;
+
   if (image_url !== undefined && image_url !== existingProduct.image_url) {
-    let newImageUrl = image_url;
+    newImageUrl = image_url;
     if (image_url && (image_url.startsWith("data:") || image_url.startsWith("http"))) {
       try {
         const resp = await cloudinaryImageUploader(image_url);
         if (resp) {
           newImageUrl = resp;
-          // Optionally attempt cleanup of previous image
+          // Remember the old public ID only if it's a Cloudinary-managed asset
           if (existingProduct.image_url && !existingProduct.image_url.startsWith("http")) {
-            await deleteCloudinaryImage(existingProduct.image_url).catch((err) =>
-              console.warn("Failed to delete previous image:", err.message)
-            );
+            oldImagePublicId = existingProduct.image_url;
           }
         }
       } catch (err) {
@@ -152,6 +157,15 @@ const updateProduct = async (req, res, next) => {
     where: { product_id: productId },
     data: updateData,
   });
+
+  // Delete the old Cloudinary image only after the DB update succeeds.
+  // If we deleted it before and the DB update failed, the old image would be
+  // gone but the product DB row would still reference a now-deleted asset.
+  if (oldImagePublicId) {
+    await deleteCloudinaryImage(oldImagePublicId).catch((err) =>
+      console.warn("Failed to delete previous image:", err.message)
+    );
+  }
 
   return res.status(StatusCodes.OK).json({
     message: "Product updated successfully",
@@ -170,16 +184,20 @@ const deleteProduct = async (req, res, next) => {
     throw new NotFoundError(`Product with id ${productId} not found`);
   }
 
-  // Delete image from Cloudinary if applicable
+  // Delete the DB record first. If it fails (e.g. FK constraint from an active
+  // CartItem or OrderItem referencing this product), the Cloudinary image is
+  // preserved. Previously the image was deleted before the DB row, leaving a
+  // broken image_url if the DB delete failed.
+  await prisma.product.delete({
+    where: { product_id: productId },
+  });
+
+  // Only clean up Cloudinary after the DB row is confirmed deleted.
   if (existingProduct.image_url && !existingProduct.image_url.startsWith("http")) {
     await deleteCloudinaryImage(existingProduct.image_url).catch((err) =>
       console.warn("Failed to delete product image from Cloudinary:", err.message)
     );
   }
-
-  await prisma.product.delete({
-    where: { product_id: productId },
-  });
 
   return res.status(StatusCodes.OK).json({
     message: `Product with id ${productId} deleted successfully`,
